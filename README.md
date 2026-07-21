@@ -1,36 +1,75 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Bubblecast
 
-## Getting Started
+**Learn a language by starring in a living cartoon sitcom.**
 
-First, run the development server:
+Bubblecast is a web language tutor for adults (travel & work). You explore **Harborline**, a coastal city with a recurring cast. Each mission can include:
+
+1. **Comic warmup** — short speech-bubble panels that introduce phrases  
+2. **Live scene** — improv dialogue with NPCs (typed replies)  
+3. **Debrief** — mission score, gentle corrections, vocab journal, relationship XP  
+
+Default pair: **English → Spanish**, CEFR A1–B1.
+
+**Suggested deploy slug:** [bubblecast.vercel.app](https://bubblecast.vercel.app) (was free when checked).
+
+## Stack
+
+- Next.js (App Router) + Tailwind  
+- xAI via Vercel AI SDK (`ai` + `@ai-sdk/xai`)  
+- Structured generation with Zod schemas (Director / Cast / Coach / Comic Writer)  
+- Local learner progress in `localStorage` (no auth in MVP)
+
+## Setup
 
 ```bash
+npm install
+cp .env.example .env.local
+# Add your key:
+# XAI_API_KEY=...
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Get an API key at [console.x.ai](https://console.x.ai). Without a key, the app still boots and uses limited offline fallbacks for comics/openings/debriefs.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Try the golden path
 
-## Learn More
+1. **Enter city** → Harborline map  
+2. Start **Mercado Café → Order breakfast**  
+3. Read the comic panels  
+4. Jump into the live scene and order in Spanish (English is OK; cast will model Spanish)  
+5. Use **Hint** if stuck, then **End** for debrief  
+6. Check **Journal** and **Cast** relationship bars  
 
-To learn more about Next.js, take a look at the following resources:
+## Project layout
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```
+src/
+  content/harborline/   # world pack: cast, locations, missions
+  lib/ai/               # xAI client, prompts, schemas, scene service
+  lib/session/          # in-memory scene sessions
+  components/           # Stage, comic, map, avatars
+  app/play/             # city + mission player
+  app/api/scene/        # start | turn | hint | end
+  app/api/comic/        # comic generation
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Scripts
 
-## Deploy on Vercel
+| Command         | Purpose              |
+|-----------------|----------------------|
+| `npm run dev`   | Local dev server     |
+| `npm run build` | Production build     |
+| `npm run start` | Serve production     |
+| `npm run lint`  | ESLint               |
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Product notes
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- The LLM is a **director + cast + coach**, not a freeform chatbot.  
+- Mission success uses communicative goals, not perfect grammar.  
+- Image/video gen and voice I/O are intentionally deferred.  
+
+## License
+
+Private / unlicensed unless you add one.
