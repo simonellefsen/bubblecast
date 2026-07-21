@@ -21,7 +21,6 @@ import { getModel } from "./client";
 import {
   comicScriptSchema,
   debriefSchema,
-  hintSchema,
   npcResponseSchema,
   scenePlanSchema,
 } from "./schemas";
@@ -34,9 +33,7 @@ import {
   debriefUserPrompt,
   directorSystemPrompt,
   directorUserPrompt,
-  hintSystemPrompt,
 } from "./prompts";
-import { getScene, saveDebrief, saveScene } from "@/lib/session/store";
 
 function fallbackComic(missionId: string): ComicScript {
   const mission = getMission(missionId);
@@ -104,6 +101,16 @@ function fallbackPlan(missionId: string, cefr: CefrLevel): ScenePlan {
       },
     ],
   };
+}
+
+function cloneSession(session: SceneSession): SceneSession {
+  return structuredClone(session);
+}
+
+function assertActiveSession(session: SceneSession) {
+  if (session.status === "ended") {
+    throw new Error("Scene already ended");
+  }
 }
 
 export async function generateComic(missionId: string): Promise<ComicScript> {
@@ -188,7 +195,7 @@ export async function startScene(opts: {
     })),
   ];
 
-  const session: SceneSession = {
+  return {
     id: randomUUID(),
     missionId: mission.id,
     locationId: mission.locationId,
@@ -203,50 +210,46 @@ export async function startScene(opts: {
     createdAt: now,
     updatedAt: now,
   };
-
-  saveScene(session);
-  return session;
 }
 
-export function beginLive(sessionId: string): SceneSession {
-  const session = getScene(sessionId);
-  if (!session) throw new Error("Scene not found");
-  session.status = "live";
-  session.updatedAt = new Date().toISOString();
-  saveScene(session);
-  return session;
+/** Serverless-safe: mutates a copy of the client-provided session. */
+export function beginLive(session: SceneSession): SceneSession {
+  const next = cloneSession(session);
+  assertActiveSession(next);
+  next.status = "live";
+  next.updatedAt = new Date().toISOString();
+  return next;
 }
 
 export async function learnerTurn(
-  sessionId: string,
+  session: SceneSession,
   text: string,
 ): Promise<SceneSession> {
-  const session = getScene(sessionId);
-  if (!session) throw new Error("Scene not found");
-  if (session.status === "ended") throw new Error("Scene already ended");
-  if (session.status === "comic") session.status = "live";
+  const next = cloneSession(session);
+  assertActiveSession(next);
+  if (next.status === "comic") next.status = "live";
 
   const now = new Date().toISOString();
-  session.turns.push({
+  next.turns.push({
     role: "learner",
     speakerId: "learner",
     text,
     at: now,
   });
-  session.turnCount += 1;
+  next.turnCount += 1;
 
-  const cast = getCharacters(session.castIds);
+  const cast = getCharacters(next.castIds);
 
   try {
     const { object } = await generateObject({
       model: getModel(),
       schema: npcResponseSchema,
-      system: actorSystemPrompt(session, cast),
-      prompt: actorUserPrompt(session, text),
+      system: actorSystemPrompt(next, cast),
+      prompt: actorUserPrompt(next, text),
     });
 
     for (const t of object.turns) {
-      session.turns.push({
+      next.turns.push({
         role: "npc",
         speakerId: t.speakerId as CharacterId,
         text: t.text,
@@ -257,31 +260,28 @@ export async function learnerTurn(
     }
 
     for (const update of object.beatUpdates) {
-      const beat = session.beats.find((b) => b.id === update.beatId);
+      const beat = next.beats.find((b) => b.id === update.beatId);
       if (beat && update.completed) beat.completed = true;
     }
 
     if (object.coachWhisper) {
-      session.turns.push({
+      next.turns.push({
         role: "system",
         text: `💡 ${object.coachWhisper}`,
         at: new Date().toISOString(),
       });
     }
 
-    if (object.sceneShouldEnd || session.turnCount >= session.maxTurns) {
-      // leave ending to explicit end endpoint; mark almost done via system note
-      if (session.turnCount >= session.maxTurns) {
-        session.turns.push({
-          role: "system",
-          text: "The scene is wrapping up — end the mission when you're ready.",
-          at: new Date().toISOString(),
-        });
-      }
+    if (next.turnCount >= next.maxTurns) {
+      next.turns.push({
+        role: "system",
+        text: "The scene is wrapping up — end the mission when you're ready.",
+        at: new Date().toISOString(),
+      });
     }
   } catch {
     const lead = cast[0];
-    session.turns.push({
+    next.turns.push({
       role: "npc",
       speakerId: lead.id,
       text: "Perdón, ¿puedes repetir un poco más despacio?",
@@ -291,60 +291,37 @@ export async function learnerTurn(
     });
   }
 
-  session.updatedAt = new Date().toISOString();
-  saveScene(session);
-  return session;
+  next.updatedAt = new Date().toISOString();
+  return next;
 }
 
-export async function getHint(
-  sessionId: string,
+export function getHint(
+  session: SceneSession,
   level: "soft" | "phrase" | "full" = "soft",
 ) {
-  const session = getScene(sessionId);
-  if (!session) throw new Error("Scene not found");
   const openBeat = session.beats.find((b) => !b.completed) ?? session.beats[0];
 
   if (!openBeat) {
     return { level, text: "You're doing fine — keep the conversation going." };
   }
 
-  // deterministic ladder without API when possible
   if (level === "soft") return { level, text: openBeat.hintSoft };
   if (level === "phrase")
     return { level, text: openBeat.hintPhrase, gloss: "Try using this phrase" };
-  if (level === "full")
-    return {
-      level,
-      text: openBeat.hintFull,
-      gloss: "Model line — adapt it in your own words",
-    };
-
-  try {
-    const { object } = await generateObject({
-      model: getModel(),
-      schema: hintSchema,
-      system: hintSystemPrompt(),
-      prompt: JSON.stringify({
-        level,
-        beat: openBeat,
-        recent: session.turns.slice(-6),
-      }),
-    });
-    return object;
-  } catch {
-    return { level, text: openBeat.hintSoft };
-  }
+  return {
+    level,
+    text: openBeat.hintFull,
+    gloss: "Model line — adapt it in your own words",
+  };
 }
 
-export async function endScene(sessionId: string): Promise<{
+export async function endScene(session: SceneSession): Promise<{
   session: SceneSession;
   debrief: DebriefPacket;
 }> {
-  const session = getScene(sessionId);
-  if (!session) throw new Error("Scene not found");
-
-  const mission = getMission(session.missionId);
-  const cast = getCharacters(session.castIds);
+  const next = cloneSession(session);
+  const mission = getMission(next.missionId);
+  const cast = getCharacters(next.castIds);
 
   let debrief: DebriefPacket;
   try {
@@ -352,7 +329,7 @@ export async function endScene(sessionId: string): Promise<{
       model: getModel(),
       schema: debriefSchema,
       system: debriefSystemPrompt(),
-      prompt: debriefUserPrompt(session, mission, cast),
+      prompt: debriefUserPrompt(next, mission, cast),
     });
     debrief = {
       ...object,
@@ -362,10 +339,8 @@ export async function endScene(sessionId: string): Promise<{
       })),
     };
   } catch {
-    const completed = session.beats.filter((b) => b.completed).length;
-    const ratio = session.beats.length
-      ? completed / session.beats.length
-      : 0;
+    const completed = next.beats.filter((b) => b.completed).length;
+    const ratio = next.beats.length ? completed / next.beats.length : 0;
     const outcome =
       ratio >= 0.7 ? "success" : ratio >= 0.35 ? "partial" : "fail";
     debrief = {
@@ -378,7 +353,7 @@ export async function endScene(sessionId: string): Promise<{
             ? "You made progress — a few goals still open."
             : "Tough scene, but every attempt builds fluency.",
       criteriaResults: mission.successCriteria.map((c) => {
-        const beat = session.beats.find((b) => b.id === c.id);
+        const beat = next.beats.find((b) => b.id === c.id);
         return {
           id: c.id,
           met: Boolean(beat?.completed),
@@ -399,9 +374,7 @@ export async function endScene(sessionId: string): Promise<{
     };
   }
 
-  session.status = "ended";
-  session.updatedAt = new Date().toISOString();
-  saveScene(session);
-  saveDebrief(sessionId, debrief);
-  return { session, debrief };
+  next.status = "ended";
+  next.updatedAt = new Date().toISOString();
+  return { session: next, debrief };
 }

@@ -14,6 +14,11 @@ import type {
   SceneSession,
 } from "@/content/types";
 import { hydrateLearner, saveLearnerAfterDebrief } from "@/lib/learner-client";
+import {
+  clearActiveScene,
+  loadActiveScene,
+  saveActiveScene,
+} from "@/lib/session/client-session";
 import { applyDebriefToLearner } from "@/lib/session/store";
 import { CharacterAvatar } from "./CharacterAvatar";
 import { ComicReader } from "./ComicReader";
@@ -39,17 +44,41 @@ export function MissionPlayer({ missionId }: { missionId: string }) {
   const [showGloss, setShowGloss] = useState(true);
   const [hintLevel, setHintLevel] = useState(0);
   const [hintText, setHintText] = useState<string | null>(null);
+  const [resumed, setResumed] = useState(false);
   const scroller = useRef<HTMLDivElement>(null);
+
+  function commitSession(
+    next: SceneSession,
+    nextPhase: "comic" | "live" | "debrief",
+  ) {
+    setSession(next);
+    if (nextPhase === "comic" || nextPhase === "live") {
+      setPhase(nextPhase);
+      saveActiveScene(missionId, next, nextPhase);
+    } else {
+      setPhase(nextPhase);
+      clearActiveScene(missionId);
+    }
+  }
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       setPhase("loading");
       setError(null);
+      setResumed(false);
       try {
         const { learner: hydrated } = await hydrateLearner();
         if (cancelled) return;
         setLearner(hydrated);
+
+        const existing = loadActiveScene(missionId);
+        if (existing?.session) {
+          setSession(existing.session);
+          setPhase(existing.phase);
+          setResumed(true);
+          return;
+        }
 
         const res = await fetch("/api/scene/start", {
           method: "POST",
@@ -66,8 +95,8 @@ export function MissionPlayer({ missionId }: { missionId: string }) {
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Failed to start");
         if (cancelled) return;
-        setSession(data.session);
-        setPhase(data.session.comic ? "comic" : "live");
+        const nextPhase = data.session.comic ? "comic" : "live";
+        commitSession(data.session, nextPhase);
       } catch (e) {
         if (cancelled) return;
         setError(e instanceof Error ? e.message : "Failed to start mission");
@@ -77,6 +106,7 @@ export function MissionPlayer({ missionId }: { missionId: string }) {
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- start once per mission
   }, [missionId]);
 
   useEffect(() => {
@@ -90,18 +120,22 @@ export function MissionPlayer({ missionId }: { missionId: string }) {
     if (!session) return;
     setBusy(true);
     try {
+      // Prefer local transition; keep API for consistency / status stamp
       const res = await fetch("/api/scene/turn", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sessionId: session.id, action: "begin_live" }),
+        body: JSON.stringify({ session, action: "begin_live" }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed");
-      setSession(data.session);
-      setPhase("live");
+      commitSession(data.session, "live");
       setHintText(null);
       setHintLevel(0);
+      setResumed(false);
     } catch (e) {
+      // Offline/local fallback if API fails
+      const local = { ...session, status: "live" as const };
+      commitSession(local, "live");
       setError(e instanceof Error ? e.message : "Could not enter scene");
     } finally {
       setBusy(false);
@@ -119,11 +153,11 @@ export function MissionPlayer({ missionId }: { missionId: string }) {
       const res = await fetch("/api/scene/turn", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sessionId: session.id, text }),
+        body: JSON.stringify({ session, text }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Turn failed");
-      setSession(data.session);
+      commitSession(data.session, "live");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Turn failed");
       setInput(text);
@@ -141,7 +175,7 @@ export function MissionPlayer({ missionId }: { missionId: string }) {
       const res = await fetch("/api/scene/hint", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sessionId: session.id, level }),
+        body: JSON.stringify({ session, level }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Hint failed");
@@ -165,11 +199,11 @@ export function MissionPlayer({ missionId }: { missionId: string }) {
       const res = await fetch("/api/scene/end", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sessionId: session.id }),
+        body: JSON.stringify({ session }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "End failed");
-      setSession(data.session);
+      commitSession(data.session, "debrief");
       setDebrief(data.debrief);
       const updated = applyDebriefToLearner(learner, data.debrief, mission.id);
       const { error: syncError } = await saveLearnerAfterDebrief(
@@ -178,12 +212,48 @@ export function MissionPlayer({ missionId }: { missionId: string }) {
         data.debrief,
       );
       setLearner(updated);
-      setPhase("debrief");
+      clearActiveScene(missionId);
       if (syncError) {
         setError(`Saved locally; cloud sync: ${syncError}`);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not end scene");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function restartMission() {
+    clearActiveScene(missionId);
+    setSession(null);
+    setDebrief(null);
+    setPhase("loading");
+    setError(null);
+    setResumed(false);
+    setHintLevel(0);
+    setHintText(null);
+    if (!learner) return;
+    setBusy(true);
+    try {
+      const res = await fetch("/api/scene/start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          missionId,
+          learner: {
+            cefr: learner.cefr,
+            displayName: learner.displayName,
+          },
+          includeComic: true,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to start");
+      const nextPhase = data.session.comic ? "comic" : "live";
+      commitSession(data.session, nextPhase);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to restart");
+      setPhase("error");
     } finally {
       setBusy(false);
     }
@@ -205,12 +275,20 @@ export function MissionPlayer({ missionId }: { missionId: string }) {
         <p className="mt-2 text-sm text-red-700">{error}</p>
         <p className="mt-2 text-sm text-red-600">
           Ensure <code className="rounded bg-white px-1">XAI_API_KEY</code> is set
-          in <code className="rounded bg-white px-1">.env.local</code>. Offline
-          fallbacks still work for some paths.
+          on the server. Offline fallbacks still work for some paths.
         </p>
-        <Link href="/play" className="mt-4 inline-block text-sm text-orange-700">
-          ← Back to map
-        </Link>
+        <div className="mt-4 flex gap-3">
+          <button
+            type="button"
+            onClick={() => void restartMission()}
+            className="text-sm font-medium text-orange-700"
+          >
+            Try again
+          </button>
+          <Link href="/play" className="text-sm text-slate-600">
+            ← Back to map
+          </Link>
+        </div>
       </div>
     );
   }
@@ -243,6 +321,20 @@ export function MissionPlayer({ missionId }: { missionId: string }) {
         </div>
       </div>
 
+      {resumed ? (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-900">
+          <span>Resumed your in-progress scene (safe after refresh).</span>
+          <button
+            type="button"
+            onClick={() => void restartMission()}
+            className="font-medium underline"
+            disabled={busy}
+          >
+            Start over
+          </button>
+        </div>
+      ) : null}
+
       {error ? (
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
           {error}
@@ -264,10 +356,8 @@ export function MissionPlayer({ missionId }: { missionId: string }) {
             <button
               type="button"
               onClick={() => {
-                setPhase("live");
-                if (session) {
-                  setSession({ ...session, status: "live" });
-                }
+                const next = { ...session, status: "live" as const };
+                commitSession(next, "live");
               }}
               className="rounded-full border bg-white px-4 py-2.5 text-sm text-slate-700"
             >
@@ -505,7 +595,7 @@ function DebriefView({
       </div>
 
       <p className="text-xs text-slate-400">
-        World: {harborline.name} · progress saved in this browser
+        World: {harborline.name} · progress synced when Supabase is configured
       </p>
     </div>
   );
