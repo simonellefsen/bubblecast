@@ -17,21 +17,32 @@ Default pair: **English → Spanish**, CEFR A1–B1.
 - Next.js (App Router) + Tailwind  
 - xAI via Vercel AI SDK (`ai` + `@ai-sdk/xai`)  
 - Structured generation with Zod schemas (Director / Cast / Coach / Comic Writer)  
-- Local learner progress in `localStorage` (no auth in MVP)
+- **Supabase** (shared free project): schema `bubblecast` + views `public.bubblecast_*`  
+- Local cache in `localStorage` + anonymous auth cloud sync  
 
 ## Setup
 
 ```bash
 npm install
 cp .env.example .env.local
-# Add your key:
+# Add:
 # XAI_API_KEY=...
+# NEXT_PUBLIC_SUPABASE_URL=...
+# NEXT_PUBLIC_SUPABASE_ANON_KEY=...
 npm run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000).
 
-Get an API key at [console.x.ai](https://console.x.ai). Without a key, the app still boots and uses limited offline fallbacks for comics/openings/debriefs.
+### Supabase (shared multi-app project)
+
+Bubblecast is an isolated tenant — see [`supabase/README.md`](./supabase/README.md).
+
+1. Enable **Anonymous** sign-ins (Auth → Providers).  
+2. Set the two `NEXT_PUBLIC_SUPABASE_*` env vars (Vercel + local).  
+3. Migrations live in `supabase/migrations/` (already applied to the Shared project via MCP).  
+
+Get an xAI key at [console.x.ai](https://console.x.ai). Without it, scenes use limited offline fallbacks.
 
 ## Try the golden path
 
@@ -48,11 +59,12 @@ Get an API key at [console.x.ai](https://console.x.ai). Without a key, the app s
 src/
   content/harborline/   # world pack: cast, locations, missions
   lib/ai/               # xAI client, prompts, schemas, scene service
+  lib/supabase/         # browser client + learner sync (bubblecast_* only)
   lib/session/          # in-memory scene sessions
   components/           # Stage, comic, map, avatars
   app/play/             # city + mission player
   app/api/scene/        # start | turn | hint | end
-  app/api/comic/        # comic generation
+  supabase/migrations/  # Bubblecast-only SQL (schema bubblecast)
 ```
 
 ## Scripts

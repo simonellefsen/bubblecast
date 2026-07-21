@@ -13,7 +13,7 @@ import type {
   LearnerProfile,
   SceneSession,
 } from "@/content/types";
-import { loadLearner, saveLearner } from "@/lib/learner-client";
+import { hydrateLearner, saveLearnerAfterDebrief } from "@/lib/learner-client";
 import { applyDebriefToLearner } from "@/lib/session/store";
 import { CharacterAvatar } from "./CharacterAvatar";
 import { ComicReader } from "./ComicReader";
@@ -42,24 +42,23 @@ export function MissionPlayer({ missionId }: { missionId: string }) {
   const scroller = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    setLearner(loadLearner());
-  }, []);
-
-  useEffect(() => {
-    if (!learner) return;
     let cancelled = false;
     (async () => {
       setPhase("loading");
       setError(null);
       try {
+        const { learner: hydrated } = await hydrateLearner();
+        if (cancelled) return;
+        setLearner(hydrated);
+
         const res = await fetch("/api/scene/start", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             missionId,
             learner: {
-              cefr: learner.cefr,
-              displayName: learner.displayName,
+              cefr: hydrated.cefr,
+              displayName: hydrated.displayName,
             },
             includeComic: true,
           }),
@@ -78,7 +77,7 @@ export function MissionPlayer({ missionId }: { missionId: string }) {
     return () => {
       cancelled = true;
     };
-  }, [learner, missionId]);
+  }, [missionId]);
 
   useEffect(() => {
     scroller.current?.scrollTo({
@@ -173,9 +172,16 @@ export function MissionPlayer({ missionId }: { missionId: string }) {
       setSession(data.session);
       setDebrief(data.debrief);
       const updated = applyDebriefToLearner(learner, data.debrief, mission.id);
-      saveLearner(updated);
+      const { error: syncError } = await saveLearnerAfterDebrief(
+        updated,
+        mission.id,
+        data.debrief,
+      );
       setLearner(updated);
       setPhase("debrief");
+      if (syncError) {
+        setError(`Saved locally; cloud sync: ${syncError}`);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not end scene");
     } finally {

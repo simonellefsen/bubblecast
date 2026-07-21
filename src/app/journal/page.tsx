@@ -3,14 +3,21 @@
 import { useEffect, useState } from "react";
 import { AppShell } from "@/components/AppShell";
 import type { LearnerProfile } from "@/content/types";
-import { loadLearner } from "@/lib/learner-client";
+import { hydrateLearner } from "@/lib/learner-client";
 import { harborline } from "@/content/harborline/world";
 
 export default function JournalPage() {
   const [learner, setLearner] = useState<LearnerProfile | null>(null);
 
   useEffect(() => {
-    setLearner(loadLearner());
+    let cancelled = false;
+    (async () => {
+      const { learner: hydrated } = await hydrateLearner();
+      if (!cancelled) setLearner(hydrated);
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   return (
@@ -22,7 +29,8 @@ export default function JournalPage() {
           <div>
             <h1 className="text-3xl font-semibold tracking-tight">Vocab journal</h1>
             <p className="mt-1 text-slate-600">
-              Words and phrases from your Harborline scenes. Stored in this browser.
+              Words and phrases from your Harborline scenes. Synced when Supabase is
+              configured.
             </p>
           </div>
 
@@ -44,7 +52,10 @@ export default function JournalPage() {
                 learner.completedMissionIds.map((id) => {
                   const m = harborline.missions.find((x) => x.id === id);
                   return (
-                    <li key={id} className="flex justify-between border-b border-slate-50 py-2">
+                    <li
+                      key={id}
+                      className="flex justify-between border-b border-slate-50 py-2"
+                    >
                       <span>{m?.title ?? id}</span>
                       <span className="text-slate-400">{m?.difficulty}</span>
                     </li>

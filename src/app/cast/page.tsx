@@ -5,13 +5,20 @@ import { AppShell } from "@/components/AppShell";
 import { CharacterAvatar } from "@/components/CharacterAvatar";
 import { harborline } from "@/content/harborline/world";
 import type { LearnerProfile } from "@/content/types";
-import { loadLearner } from "@/lib/learner-client";
+import { hydrateLearner } from "@/lib/learner-client";
 
 export default function CastPage() {
   const [learner, setLearner] = useState<LearnerProfile | null>(null);
 
   useEffect(() => {
-    setLearner(loadLearner());
+    let cancelled = false;
+    (async () => {
+      const { learner: hydrated } = await hydrateLearner();
+      if (!cancelled) setLearner(hydrated);
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   return (
