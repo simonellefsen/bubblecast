@@ -19,9 +19,14 @@ export function AppShell({
       <header className="sticky top-0 z-20 border-b border-orange-100/80 bg-white/80 backdrop-blur">
         <div className="mx-auto flex max-w-5xl items-center justify-between gap-4 px-4 py-3">
           <Link href="/" className="flex items-center gap-2 font-semibold tracking-tight">
-            <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-orange-500 text-sm text-white shadow-sm">
-              B
-            </span>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/favicon.svg"
+              alt=""
+              width={32}
+              height={32}
+              className="h-8 w-8 rounded-xl shadow-sm"
+            />
             <span>
               Bubblecast
               {title ? (

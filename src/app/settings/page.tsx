@@ -102,6 +102,28 @@ export default function SettingsPage() {
             </button>
           </section>
         ) : null}
+
+        <section className="rounded-2xl border bg-white p-4 shadow-sm">
+          <h2 className="font-semibold">Phone install</h2>
+          <p className="mt-1 text-sm text-slate-600">
+            Save Bubblecast to your home screen for a full-screen, app-like
+            experience — no store download.
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              try {
+                localStorage.removeItem("bubblecast-homescreen-modal-v1");
+              } catch {
+                /* ignore */
+              }
+              window.dispatchEvent(new Event("bubblecast:show-homescreen-modal"));
+            }}
+            className="mt-3 rounded-full bg-orange-500 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-600"
+          >
+            How to add to home screen
+          </button>
+        </section>
       </div>
     </AppShell>
   );

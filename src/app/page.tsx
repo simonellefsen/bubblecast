@@ -8,9 +8,14 @@ export default function HomePage() {
       <div className="relative mx-auto flex min-h-full max-w-5xl flex-col px-4 py-10">
         <header className="flex items-center justify-between">
           <div className="flex items-center gap-2 font-semibold">
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-orange-500 text-white">
-              B
-            </span>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/favicon.svg"
+              alt=""
+              width={36}
+              height={36}
+              className="h-9 w-9 rounded-xl shadow-sm shadow-orange-500/30"
+            />
             Bubblecast
           </div>
           <Link
