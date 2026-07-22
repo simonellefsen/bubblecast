@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { AppShell } from "@/components/AppShell";
 import type { CefrLevel, LearnerProfile } from "@/content/types";
+import { AchievementsPanel } from "@/components/AchievementsPanel";
 import {
   exportProgressBackup,
   hydrateLearner,
@@ -12,6 +13,7 @@ import {
 } from "@/lib/learner-client";
 import { isSupabaseConfigured } from "@/lib/supabase/client";
 import { clearAllActiveScenes } from "@/lib/session/client-session";
+import { evaluateAchievements } from "@/lib/achievements";
 import { loadStreak } from "@/lib/streak";
 import { DAILY_AI_SOFT_CAP, loadUsage } from "@/lib/usage";
 
@@ -37,6 +39,7 @@ export default function SettingsPage() {
       const { learner: hydrated, source, error } = await hydrateLearner();
       if (cancelled) return;
       setLearner(hydrated);
+      evaluateAchievements(hydrated);
       if (error) setCloudNote(error);
       else if (source === "supabase") setCloudNote("Cloud profile active");
       else if (supabaseOn) setCloudNote("Using local cache");
@@ -213,6 +216,8 @@ export default function SettingsPage() {
             </button>
           </section>
         ) : null}
+
+        <AchievementsPanel />
 
         <section className="space-y-3 rounded-2xl border bg-white p-4 shadow-sm">
           <h2 className="font-semibold">Backup</h2>

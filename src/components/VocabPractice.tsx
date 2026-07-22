@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { LearnerProfile, VocabEntry } from "@/content/types";
+import { evaluateAchievements } from "@/lib/achievements";
 import { updateVocabStatus } from "@/lib/learner-client";
 import { countDueVocab, isVocabDue, sortForPractice } from "@/lib/srs";
 import { recordActivity } from "@/lib/streak";
@@ -80,6 +81,7 @@ export function VocabPractice({
     const next = updateVocabStatus(learner, card.word, status);
     onUpdate(next);
     recordActivity();
+    evaluateAchievements(next);
     setFlipped(false);
     setDone((d) => d + 1);
     setIndex((i) => i + 1);

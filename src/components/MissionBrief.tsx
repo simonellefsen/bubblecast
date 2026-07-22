@@ -30,10 +30,24 @@ export function MissionBrief({
   lockHint?: string;
 }) {
   const [aiUsed, setAiUsed] = useState(0);
+  const [shareNote, setShareNote] = useState<string | null>(null);
   useEffect(() => {
     setAiUsed(loadUsage().count);
   }, []);
   const remaining = Math.max(0, DAILY_AI_SOFT_CAP - aiUsed);
+
+  async function copyMissionLink() {
+    const url =
+      typeof window !== "undefined"
+        ? `${window.location.origin}/play/mission/${mission.id}`
+        : `https://bubblecast.vercel.app/play/mission/${mission.id}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      setShareNote("Link copied");
+    } catch {
+      setShareNote(url);
+    }
+  }
 
   return (
     <div className="mx-auto max-w-2xl space-y-5">
@@ -142,11 +156,21 @@ export function MissionBrief({
         </>
       ) : null}
 
-      <p className="text-xs text-slate-400">
-        Playing as {learner.displayName} · CEFR {learner.cefr} · {learner.xp} XP
-        {" · "}
-        AI budget ~{remaining}/{DAILY_AI_SOFT_CAP} left today
-      </p>
+      <div className="flex flex-wrap items-center gap-3 text-xs text-slate-400">
+        <span>
+          Playing as {learner.displayName} · CEFR {learner.cefr} · {learner.xp} XP
+          {" · "}
+          AI budget ~{remaining}/{DAILY_AI_SOFT_CAP} left today
+        </span>
+        <button
+          type="button"
+          onClick={() => void copyMissionLink()}
+          className="font-medium text-orange-700 underline"
+        >
+          Copy mission link
+        </button>
+        {shareNote ? <span className="text-slate-500">{shareNote}</span> : null}
+      </div>
     </div>
   );
 }

@@ -18,6 +18,10 @@ import type {
   SceneSession,
 } from "@/content/types";
 import {
+  evaluateAchievements,
+  type Achievement,
+} from "@/lib/achievements";
+import {
   hydrateLearner,
   saveLearner,
   saveLearnerAfterDebrief,
@@ -32,6 +36,7 @@ import { applyDebriefToLearner } from "@/lib/session/store";
 import { suggestCefrNudge, type CefrNudge } from "@/lib/cefr-nudge";
 import { recordActivity } from "@/lib/streak";
 import { checkAiBudget, DAILY_AI_SOFT_CAP, recordAiUsage } from "@/lib/usage";
+import { AchievementsPanel } from "./AchievementsPanel";
 import { CharacterAvatar } from "./CharacterAvatar";
 import { ComicReader } from "./ComicReader";
 import { MissionBrief } from "./MissionBrief";
@@ -64,6 +69,8 @@ export function MissionPlayer({ missionId }: { missionId: string }) {
   const [unlockedNow, setUnlockedNow] = useState<MissionTemplate[]>([]);
   const [streakCount, setStreakCount] = useState(0);
   const [cefrNudge, setCefrNudge] = useState<CefrNudge | null>(null);
+  const [newAchievements, setNewAchievements] = useState<Achievement[]>([]);
+  const [showKeys, setShowKeys] = useState(false);
   const scroller = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -170,6 +177,47 @@ export function MissionPlayer({ missionId }: { missionId: string }) {
       behavior: "smooth",
     });
   }, [session?.turns.length, phase]);
+
+  // Live-scene shortcuts (ignored while typing in inputs handled by target check)
+  useEffect(() => {
+    if (phase !== "live" || !session) return;
+    function onKey(e: KeyboardEvent) {
+      const tag = (e.target as HTMLElement | null)?.tagName;
+      const typing =
+        tag === "INPUT" || tag === "TEXTAREA" || (e.target as HTMLElement)?.isContentEditable;
+      if (e.key === "?" || (e.key === "/" && e.shiftKey)) {
+        if (!typing) {
+          e.preventDefault();
+          setShowKeys((v) => !v);
+        }
+        return;
+      }
+      if (typing) return;
+      if (e.key === "h" || e.key === "H") {
+        e.preventDefault();
+        void requestHint();
+      }
+      if (e.key === "e" || e.key === "E") {
+        e.preventDefault();
+        void finishScene();
+      }
+      const digit = Number(e.key);
+      if (digit >= 1 && digit <= 9) {
+        const phrase = mission.targetPhrases[digit - 1];
+        if (phrase) {
+          e.preventDefault();
+          setInput((prev) => {
+            const trimmed = prev.trim();
+            return trimmed ? `${trimmed} ${phrase}` : phrase;
+          });
+          requestAnimationFrame(() => inputRef.current?.focus());
+        }
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- stable mission phrases
+  }, [phase, session?.id, busy, hintLevel]);
 
   async function enterLive() {
     if (!session) return;
@@ -359,6 +407,7 @@ export function MissionPlayer({ missionId }: { missionId: string }) {
       const streak = recordActivity();
       setStreakCount(streak.count);
       setCefrNudge(suggestCefrNudge(learner.cefr, data.debrief));
+      setNewAchievements(evaluateAchievements(updated));
       const { error: syncError } = await saveLearnerAfterDebrief(
         updated,
         mission.id,
@@ -546,6 +595,16 @@ export function MissionPlayer({ missionId }: { missionId: string }) {
 
       {phase === "live" && session ? (
         <div className="grid gap-4 pb-28 lg:grid-cols-[1fr_240px] lg:pb-0">
+          {showKeys ? (
+            <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600 lg:col-span-2">
+              <span className="font-semibold text-slate-800">Shortcuts: </span>
+              <kbd className="rounded bg-slate-100 px-1">H</kbd> hint ·{" "}
+              <kbd className="rounded bg-slate-100 px-1">E</kbd> end ·{" "}
+              <kbd className="rounded bg-slate-100 px-1">1–9</kbd> insert phrase ·{" "}
+              <kbd className="rounded bg-slate-100 px-1">?</kbd> toggle this help
+              (when not typing)
+            </div>
+          ) : null}
           <div
             className={`overflow-hidden rounded-3xl border border-white/60 bg-gradient-to-b ${location.background} shadow-lg`}
           >
@@ -660,6 +719,13 @@ export function MissionPlayer({ missionId }: { missionId: string }) {
               <p className="mt-2 text-xs text-slate-500">
                 Turns {session.turnCount}/{session.maxTurns}
               </p>
+              <button
+                type="button"
+                className="mt-2 text-[11px] font-medium text-orange-700 underline"
+                onClick={() => setShowKeys((v) => !v)}
+              >
+                {showKeys ? "Hide" : "Show"} keyboard shortcuts
+              </button>
             </div>
             <TargetPhrases
               phrases={mission.targetPhrases}
@@ -683,6 +749,7 @@ export function MissionPlayer({ missionId }: { missionId: string }) {
           streakCount={streakCount}
           cefrNudge={cefrNudge}
           currentCefr={learner.cefr}
+          newAchievements={newAchievements}
           onApplyCefr={(level) => {
             const next = {
               ...learner,
@@ -750,6 +817,7 @@ function DebriefView({
   cefrNudge,
   currentCefr,
   onApplyCefr,
+  newAchievements,
 }: {
   debrief: DebriefPacket;
   missionTitle: string;
@@ -758,6 +826,7 @@ function DebriefView({
   cefrNudge: CefrNudge | null;
   currentCefr: CefrLevel;
   onApplyCefr: (level: CefrLevel) => void;
+  newAchievements: Achievement[];
 }) {
   const tone =
     debrief.outcome === "success"
@@ -824,6 +893,22 @@ function DebriefView({
           </span>
         </div>
       ) : null}
+
+      {newAchievements.length > 0 ? (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
+          <h3 className="font-semibold text-amber-950">Achievements unlocked</h3>
+          <ul className="mt-2 space-y-1 text-sm text-amber-900">
+            {newAchievements.map((a) => (
+              <li key={a.id}>
+                {a.emoji} <span className="font-medium">{a.title}</span> —{" "}
+                {a.description}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      <AchievementsPanel highlight={newAchievements} />
 
       {unlocked.length > 0 ? (
         <div className="rounded-2xl border border-sky-200 bg-sky-50 p-4 shadow-sm">
