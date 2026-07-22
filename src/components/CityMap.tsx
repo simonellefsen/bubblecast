@@ -64,15 +64,19 @@ export function CityMap({ learner }: { learner: LearnerProfile }) {
               <div className="group relative">
                 <button
                   type="button"
-                  className={`flex h-14 w-14 items-center justify-center rounded-2xl border-2 border-white text-2xl shadow-lg transition group-hover:scale-110 ${
+                  aria-label={`${loc.name}${anyUnlocked ? "" : " (locked)"}`}
+                  aria-haspopup="true"
+                  className={`flex h-14 w-14 items-center justify-center rounded-2xl border-2 border-white text-2xl shadow-lg transition group-hover:scale-110 group-focus-within:scale-110 motion-reduce:transition-none motion-reduce:group-hover:scale-100 ${
                     anyUnlocked ? "bg-white/90" : "bg-slate-200/90 grayscale"
                   }`}
                   title={loc.name}
                 >
                   {loc.emoji}
                 </button>
-                <div className="invisible absolute left-1/2 top-full z-10 mt-2 w-64 -translate-x-1/2 rounded-2xl border border-slate-200 bg-white p-3 opacity-0 shadow-xl transition group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100">
-                  <div className="font-semibold">{loc.name}</div>
+                <div className="invisible absolute left-1/2 top-full z-10 mt-2 w-64 -translate-x-1/2 rounded-2xl border border-slate-200 bg-white p-3 opacity-0 shadow-xl transition group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100 motion-reduce:transition-none">
+                  <div className="font-semibold" id={`loc-${loc.id}`}>
+                    {loc.name}
+                  </div>
                   <p className="mt-1 text-xs text-slate-500">{loc.blurb}</p>
                   <ul className="mt-2 space-y-1">
                     {missions.map((m) => {

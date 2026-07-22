@@ -38,6 +38,9 @@ Default pair: **English → Spanish**, CEFR A1–B1.
 - **Unit tests** for unlocks / CEFR / up-next (`npm test`)  
 - **Phrase bank**: tap target phrases to insert into live replies  
 - **Offline banner** + dialogue `aria-live` log for screen readers  
+- **Cast → scenes** links; keyboard-focusable map pins; reduced-motion respect  
+- **Health API** reports XAI + Supabase env presence  
+
 
 
 

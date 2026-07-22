@@ -1,9 +1,13 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { AppShell } from "@/components/AppShell";
 import { CharacterAvatar } from "@/components/CharacterAvatar";
-import { harborline } from "@/content/harborline/world";
+import {
+  harborline,
+  isMissionUnlocked,
+} from "@/content/harborline/world";
 import type { LearnerProfile } from "@/content/types";
 import { hydrateLearner } from "@/lib/learner-client";
 
@@ -21,6 +25,8 @@ export default function CastPage() {
     };
   }, []);
 
+  const completed = learner?.completedMissionIds ?? [];
+
   return (
     <AppShell title="Cast">
       <div className="space-y-6">
@@ -35,6 +41,9 @@ export default function CastPage() {
           {harborline.characters.map((c) => {
             const rel = learner?.relationships.find((r) => r.characterId === c.id);
             const score = rel?.score ?? 20;
+            const missions = harborline.missions.filter((m) =>
+              m.castIds.includes(c.id),
+            );
             return (
               <article
                 key={c.id}
@@ -65,13 +74,52 @@ export default function CastPage() {
                   ) : null}
                   <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100">
                     <div
-                      className="h-full rounded-full transition-all"
+                      className="h-full rounded-full transition-all motion-reduce:transition-none"
                       style={{
                         width: `${score}%`,
                         backgroundColor: c.accentColor,
                       }}
                     />
                   </div>
+                  {missions.length > 0 ? (
+                    <div className="mt-3">
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                        Scenes
+                      </p>
+                      <ul className="mt-1 flex flex-wrap gap-1.5">
+                        {missions.map((m) => {
+                          const unlocked = isMissionUnlocked(m.id, completed);
+                          const done = completed.includes(m.id);
+                          if (!unlocked) {
+                            return (
+                              <li
+                                key={m.id}
+                                className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-400"
+                                title={m.unlockHint}
+                              >
+                                🔒 {m.title}
+                              </li>
+                            );
+                          }
+                          return (
+                            <li key={m.id}>
+                              <Link
+                                href={`/play/mission/${m.id}`}
+                                className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                                  done
+                                    ? "bg-emerald-50 text-emerald-800 hover:bg-emerald-100"
+                                    : "bg-orange-50 text-orange-800 hover:bg-orange-100"
+                                }`}
+                              >
+                                {done ? "✓ " : ""}
+                                {m.title}
+                              </Link>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </div>
+                  ) : null}
                 </div>
               </article>
             );

@@ -21,6 +21,7 @@ export default function SettingsPage() {
   const [learner, setLearner] = useState<LearnerProfile | null>(null);
   const [health, setHealth] = useState<{
     hasXaiKey: boolean;
+    hasSupabase?: boolean;
     model: string;
   } | null>(null);
   const [saved, setSaved] = useState(false);
@@ -46,7 +47,9 @@ export default function SettingsPage() {
     fetch("/api/health")
       .then((r) => r.json())
       .then(setHealth)
-      .catch(() => setHealth({ hasXaiKey: false, model: "unknown" }));
+      .catch(() =>
+        setHealth({ hasXaiKey: false, hasSupabase: false, model: "unknown" }),
+      );
     return () => {
       cancelled = true;
     };
@@ -107,9 +110,23 @@ export default function SettingsPage() {
           <h2 className="font-semibold">Backend</h2>
           <dl className="mt-3 space-y-2 text-sm">
             <div className="flex justify-between gap-3">
-              <dt className="text-slate-500">Supabase</dt>
+              <dt className="text-slate-500">Supabase (client)</dt>
               <dd className={supabaseOn ? "text-emerald-600" : "text-amber-600"}>
                 {supabaseOn ? "configured" : "missing env"}
+              </dd>
+            </div>
+            <div className="flex justify-between gap-3">
+              <dt className="text-slate-500">Supabase (server env)</dt>
+              <dd
+                className={
+                  health?.hasSupabase ? "text-emerald-600" : "text-amber-600"
+                }
+              >
+                {health
+                  ? health.hasSupabase
+                    ? "present"
+                    : "missing"
+                  : "…"}
               </dd>
             </div>
             <div className="flex justify-between gap-3">
