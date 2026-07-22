@@ -31,6 +31,7 @@ import {
 import { applyDebriefToLearner } from "@/lib/session/store";
 import { suggestCefrNudge, type CefrNudge } from "@/lib/cefr-nudge";
 import { recordActivity } from "@/lib/streak";
+import { checkAiBudget, DAILY_AI_SOFT_CAP, recordAiUsage } from "@/lib/usage";
 import { CharacterAvatar } from "./CharacterAvatar";
 import { ComicReader } from "./ComicReader";
 import { MissionBrief } from "./MissionBrief";
@@ -120,6 +121,11 @@ export function MissionPlayer({ missionId }: { missionId: string }) {
       setError(mission.unlockHint ?? "Mission locked");
       return;
     }
+    const budget = checkAiBudget(1);
+    if (!budget.ok) {
+      setError(budget.message);
+      return;
+    }
     setBusy(true);
     setPhase("loading");
     setError(null);
@@ -141,9 +147,15 @@ export function MissionPlayer({ missionId }: { missionId: string }) {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to start");
+      recordAiUsage(1);
       setLoadingStep("Setting the stage…");
       const nextPhase = data.session.comic ? "comic" : "live";
       commitSession(data.session, nextPhase);
+      if (budget.warn) {
+        setError(
+          `AI budget tip: ~${budget.remaining} free actions left today (soft cap).`,
+        );
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to start mission");
       setPhase("error");
@@ -188,6 +200,11 @@ export function MissionPlayer({ missionId }: { missionId: string }) {
   async function sendTurn(e?: React.FormEvent) {
     e?.preventDefault();
     if (!session || !input.trim() || busy) return;
+    const budget = checkAiBudget(1);
+    if (!budget.ok) {
+      setError(budget.message);
+      return;
+    }
     setBusy(true);
     setStreaming(true);
     setHintText(null);
@@ -274,6 +291,15 @@ export function MissionPlayer({ missionId }: { missionId: string }) {
         const data = await res2.json();
         if (!res2.ok) throw new Error(data.error || "Turn failed");
         commitSession(data.session, "live");
+        lastSession = data.session;
+      }
+
+      if (lastSession) {
+        const after = recordAiUsage(1);
+        if (budget.warn || after.count >= DAILY_AI_SOFT_CAP * 0.8) {
+          const left = Math.max(0, DAILY_AI_SOFT_CAP - after.count);
+          setError(`AI budget tip: ~${left} free actions left today (soft cap).`);
+        }
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Turn failed");
@@ -724,6 +750,30 @@ function DebriefView({
             🔥 {streakCount}-day streak
           </p>
         ) : null}
+        <button
+          type="button"
+          className="mt-4 rounded-full border border-slate-300 bg-white/80 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-white"
+          onClick={async () => {
+            const text = [
+              `Bubblecast · ${missionTitle}`,
+              `${debrief.outcome} · ${debrief.score}/100 · +${debrief.xpEarned} XP`,
+              debrief.summary,
+              debrief.castReaction,
+              debrief.newWords.length
+                ? `Words: ${debrief.newWords.map((w) => w.word).join(", ")}`
+                : "",
+            ]
+              .filter(Boolean)
+              .join("\n");
+            try {
+              await navigator.clipboard.writeText(text);
+            } catch {
+              /* ignore */
+            }
+          }}
+        >
+          Copy summary
+        </button>
       </div>
 
       {cefrNudge && cefrNudge.direction !== "stay" ? (

@@ -13,6 +13,7 @@ import {
 import { isSupabaseConfigured } from "@/lib/supabase/client";
 import { clearAllActiveScenes } from "@/lib/session/client-session";
 import { loadStreak } from "@/lib/streak";
+import { DAILY_AI_SOFT_CAP, loadUsage } from "@/lib/usage";
 
 const levels: CefrLevel[] = ["A1", "A2", "B1", "B2"];
 
@@ -26,6 +27,7 @@ export default function SettingsPage() {
   const [cloudNote, setCloudNote] = useState<string | null>(null);
   const [backupNote, setBackupNote] = useState<string | null>(null);
   const [streak, setStreak] = useState(0);
+  const [aiUsage, setAiUsage] = useState(0);
   const supabaseOn = isSupabaseConfigured();
 
   useEffect(() => {
@@ -40,6 +42,7 @@ export default function SettingsPage() {
       else setCloudNote("Supabase env not set — local only");
     })();
     setStreak(loadStreak().count);
+    setAiUsage(loadUsage().count);
     fetch("/api/health")
       .then((r) => r.json())
       .then(setHealth)
@@ -122,6 +125,12 @@ export default function SettingsPage() {
             <div className="flex justify-between">
               <dt className="text-slate-500">Model</dt>
               <dd className="font-mono text-xs">{health?.model ?? "…"}</dd>
+            </div>
+            <div className="flex justify-between gap-3">
+              <dt className="text-slate-500">AI actions today</dt>
+              <dd className="text-slate-700">
+                {aiUsage}/{DAILY_AI_SOFT_CAP}
+              </dd>
             </div>
           </dl>
           {!supabaseOn ? (

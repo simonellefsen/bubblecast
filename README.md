@@ -34,6 +34,9 @@ Default pair: **English → Spanish**, CEFR A1–B1.
 - **Error boundary** + auto-focus reply input after streaming turns  
 - **Up next** recommendation; optional CEFR nudge after debrief  
 - **Sticky mobile reply bar**; Settings can clear stuck scene cache  
+- **Soft daily AI budget** (default 40 start/turn actions); copy debrief summary  
+- **Unit tests** for unlocks / CEFR / up-next (`npm test`)  
+
 
 
 
