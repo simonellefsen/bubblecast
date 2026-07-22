@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import type { LearnerProfile, VocabEntry } from "@/content/types";
 import { updateVocabStatus } from "@/lib/learner-client";
+import { countDueVocab, isVocabDue, sortForPractice } from "@/lib/srs";
 import { recordActivity } from "@/lib/streak";
 
 function shuffle<T>(items: T[]): T[] {
@@ -14,18 +15,11 @@ function shuffle<T>(items: T[]): T[] {
   return arr;
 }
 
-function priority(status: VocabEntry["status"]) {
-  if (status === "new") return 0;
-  if (status === "fuzzy") return 1;
-  return 2;
-}
-
 function buildDeck(vocab: VocabEntry[]): VocabEntry[] {
-  const sorted = [...vocab].sort(
-    (a, b) => priority(a.status) - priority(b.status),
-  );
-  const focus = sorted.filter((v) => v.status !== "known");
-  return shuffle(focus.length ? focus : sorted).slice(0, 12);
+  const due = sortForPractice(vocab).filter((v) => isVocabDue(v));
+  const pool = due.length ? due : sortForPractice(vocab);
+  // Keep due order mostly; light shuffle within same priority band
+  return shuffle(pool).slice(0, 12);
 }
 
 export function VocabPractice({
@@ -40,6 +34,7 @@ export function VocabPractice({
   const [flipped, setFlipped] = useState(false);
   const [done, setDone] = useState(0);
   const [round, setRound] = useState(0);
+  const dueCount = countDueVocab(learner.vocab);
 
   // Stable deck per practice round (don't reshuffle when statuses update)
   useEffect(() => {
@@ -47,7 +42,6 @@ export function VocabPractice({
     setIndex(0);
     setFlipped(false);
     setDone(0);
-    // only when starting a new round or vocab list length jumps a lot
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [round, learner.vocab.length]);
 
@@ -65,6 +59,9 @@ export function VocabPractice({
         <p className="font-semibold text-emerald-900">Session complete</p>
         <p className="mt-1 text-sm text-emerald-800">
           Reviewed {done || deck.length} card{done === 1 ? "" : "s"}.
+          {dueCount === 0
+            ? " You’re caught up for today."
+            : ` ${dueCount} still due overall.`}
         </p>
         <button
           type="button"
@@ -92,10 +89,11 @@ export function VocabPractice({
     <div className="space-y-4 rounded-2xl border border-orange-100 bg-gradient-to-b from-orange-50/80 to-white p-4 shadow-sm">
       <div className="flex items-center justify-between text-xs text-slate-500">
         <span className="font-semibold uppercase tracking-wide text-orange-700">
-          Quick practice
+          Quick practice · SRS-lite
         </span>
         <span>
           {index + 1} / {deck.length}
+          {dueCount > 0 ? ` · ${dueCount} due` : ""}
         </span>
       </div>
 
@@ -115,6 +113,9 @@ export function VocabPractice({
             <p className="mt-2 text-xl font-semibold text-slate-900">{card.gloss}</p>
             <p className="mt-3 text-xs capitalize text-slate-400">
               was: {card.status}
+              {card.nextReviewAt
+                ? ` · was due ${isVocabDue(card) ? "now" : "later"}`
+                : ""}
             </p>
           </>
         )}
@@ -128,6 +129,7 @@ export function VocabPractice({
             className="rounded-xl border border-rose-200 bg-rose-50 px-2 py-2.5 text-xs font-semibold text-rose-800"
           >
             Still new
+            <span className="mt-0.5 block font-normal opacity-70">+1 day</span>
           </button>
           <button
             type="button"
@@ -135,6 +137,7 @@ export function VocabPractice({
             className="rounded-xl border border-amber-200 bg-amber-50 px-2 py-2.5 text-xs font-semibold text-amber-900"
           >
             Fuzzy
+            <span className="mt-0.5 block font-normal opacity-70">+3 days</span>
           </button>
           <button
             type="button"
@@ -142,11 +145,12 @@ export function VocabPractice({
             className="rounded-xl border border-emerald-200 bg-emerald-50 px-2 py-2.5 text-xs font-semibold text-emerald-900"
           >
             Know it
+            <span className="mt-0.5 block font-normal opacity-70">+7 days</span>
           </button>
         </div>
       ) : (
         <p className="text-center text-xs text-slate-500">
-          Prioritizes new & fuzzy words · light spaced practice
+          Due cards first · intervals grow as status improves
         </p>
       )}
     </div>

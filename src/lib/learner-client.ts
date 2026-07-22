@@ -4,6 +4,7 @@ import type { DebriefPacket, LearnerProfile } from "@/content/types";
 import { createDefaultLearner } from "@/lib/session/store";
 import { isSupabaseConfigured } from "@/lib/supabase/client";
 import type { VocabEntry } from "@/content/types";
+import { scheduleNextReview } from "@/lib/srs";
 import {
   fetchLearnerFromSupabase,
   persistDebrief,
@@ -170,6 +171,7 @@ export function updateVocabStatus(
           status,
           timesSeen: v.timesSeen + 1,
           lastSeenAt: now,
+          nextReviewAt: scheduleNextReview(status),
         }
       : v,
   );

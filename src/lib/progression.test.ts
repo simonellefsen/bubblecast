@@ -6,7 +6,8 @@ import {
   recommendNextMission,
 } from "@/content/harborline/world";
 import { suggestCefrNudge } from "@/lib/cefr-nudge";
-import type { DebriefPacket } from "@/content/types";
+import { isVocabDue, scheduleNextReview } from "@/lib/srs";
+import type { DebriefPacket, VocabEntry } from "@/content/types";
 
 function debrief(partial: Partial<DebriefPacket>): DebriefPacket {
   return {
@@ -75,5 +76,37 @@ describe("cefr nudge", () => {
     );
     assert.equal(nudge.direction, "stay");
     assert.equal(nudge.suggested, "A2");
+  });
+});
+
+describe("srs-lite", () => {
+  it("schedules longer intervals for known cards", () => {
+    const known = new Date(scheduleNextReview("known")).getTime();
+    const neu = new Date(scheduleNextReview("new")).getTime();
+    assert.ok(known > neu);
+  });
+
+  it("treats past nextReviewAt as due", () => {
+    const entry: VocabEntry = {
+      word: "hola",
+      gloss: "hi",
+      status: "fuzzy",
+      timesSeen: 2,
+      lastSeenAt: new Date().toISOString(),
+      nextReviewAt: new Date(Date.now() - 60_000).toISOString(),
+    };
+    assert.equal(isVocabDue(entry), true);
+  });
+
+  it("treats future nextReviewAt as not due", () => {
+    const entry: VocabEntry = {
+      word: "gracias",
+      gloss: "thanks",
+      status: "known",
+      timesSeen: 3,
+      lastSeenAt: new Date().toISOString(),
+      nextReviewAt: new Date(Date.now() + 86_400_000).toISOString(),
+    };
+    assert.equal(isVocabDue(entry), false);
   });
 });

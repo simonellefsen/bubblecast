@@ -92,6 +92,8 @@ export interface VocabEntry {
   status: "new" | "fuzzy" | "known";
   timesSeen: number;
   lastSeenAt: string;
+  /** ISO timestamp when card is due for review (SRS-lite). */
+  nextReviewAt?: string;
 }
 
 export interface Relationship {

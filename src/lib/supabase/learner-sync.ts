@@ -29,6 +29,7 @@ type VocabRow = {
   status: string;
   times_seen: number;
   last_seen_at: string;
+  next_review_at?: string | null;
 };
 
 type RelationshipRow = {
@@ -123,7 +124,7 @@ export async function fetchLearnerFromSupabase(): Promise<LearnerProfile | null>
     supabase.from("bubblecast_profiles").select("*").eq("id", userId).single(),
     supabase
       .from("bubblecast_vocab")
-      .select("word,gloss,status,times_seen,last_seen_at")
+      .select("word,gloss,status,times_seen,last_seen_at,next_review_at")
       .eq("user_id", userId)
       .order("last_seen_at", { ascending: false }),
     supabase
@@ -156,6 +157,7 @@ export async function fetchLearnerFromSupabase(): Promise<LearnerProfile | null>
       : "new") as VocabEntry["status"],
     timesSeen: v.times_seen,
     lastSeenAt: v.last_seen_at,
+    nextReviewAt: v.next_review_at ?? undefined,
   }));
 
   return {
@@ -223,6 +225,7 @@ export async function persistVocabEntry(
       status: entry.status,
       times_seen: entry.timesSeen,
       last_seen_at: entry.lastSeenAt,
+      next_review_at: entry.nextReviewAt ?? null,
     },
     { onConflict: "user_id,word" },
   );
@@ -311,6 +314,7 @@ export async function persistDebrief(
           status: existing?.status ?? "new",
           times_seen: existing?.timesSeen ?? 1,
           last_seen_at: existing?.lastSeenAt ?? new Date().toISOString(),
+          next_review_at: existing?.nextReviewAt ?? null,
         },
         { onConflict: "user_id,word" },
       );

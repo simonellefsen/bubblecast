@@ -1,5 +1,6 @@
 import type { DebriefPacket, LearnerProfile } from "@/content/types";
 import { harborline } from "@/content/harborline/world";
+import { scheduleNextReview } from "@/lib/srs";
 
 export function createDefaultLearner(): LearnerProfile {
   const now = new Date().toISOString();
@@ -61,6 +62,9 @@ export function applyDebriefToLearner(
       existing.timesSeen += 1;
       existing.lastSeenAt = new Date().toISOString();
       if (existing.status === "new") existing.status = "fuzzy";
+      if (!existing.nextReviewAt) {
+        existing.nextReviewAt = scheduleNextReview(existing.status);
+      }
     } else {
       vocab.unshift({
         word: word.word,
@@ -68,6 +72,7 @@ export function applyDebriefToLearner(
         status: "new",
         timesSeen: 1,
         lastSeenAt: new Date().toISOString(),
+        nextReviewAt: scheduleNextReview("new"),
       });
     }
   }

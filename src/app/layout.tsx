@@ -17,13 +17,29 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Bubblecast — language tutoring in living scenes",
   description:
-    "Learn languages through AI comic snippets, live speech-bubble scenes, and mission-based tasks with a recurring cast.",
+    "Learn Spanish through AI comic warmups, live speech-bubble scenes, and travel/work missions with a recurring cast.",
   applicationName: "Bubblecast",
+  metadataBase: new URL("https://bubblecast.vercel.app"),
   manifest: "/manifest.webmanifest",
   appleWebApp: {
     capable: true,
     title: "Bubblecast",
     statusBarStyle: "default",
+  },
+  openGraph: {
+    title: "Bubblecast",
+    description:
+      "Learn Spanish by starring in a coastal sitcom — comics, live scenes, unlocks.",
+    url: "https://bubblecast.vercel.app",
+    siteName: "Bubblecast",
+    type: "website",
+    locale: "en_US",
+  },
+  twitter: {
+    card: "summary",
+    title: "Bubblecast",
+    description:
+      "Learn Spanish through living cartoon scenes, missions, and a vocab journal.",
   },
   icons: {
     icon: [{ url: "/favicon.svg", type: "image/svg+xml" }],

@@ -40,6 +40,9 @@ Default pair: **English → Spanish**, CEFR A1–B1.
 - **Offline banner** + dialogue `aria-live` log for screen readers  
 - **Cast → scenes** links; keyboard-focusable map pins; reduced-motion respect  
 - **Health API** reports XAI + Supabase env presence  
+- **SRS-lite**: vocab `nextReviewAt` (1/3/7 days by grade); due-first practice  
+- **Open Graph** metadata for link previews  
+
 
 
 

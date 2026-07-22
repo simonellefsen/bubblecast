@@ -7,6 +7,7 @@ import { VocabPractice } from "@/components/VocabPractice";
 import type { LearnerProfile } from "@/content/types";
 import { hydrateLearner } from "@/lib/learner-client";
 import { harborline } from "@/content/harborline/world";
+import { countDueVocab } from "@/lib/srs";
 
 export default function JournalPage() {
   const [learner, setLearner] = useState<LearnerProfile | null>(null);
@@ -36,13 +37,14 @@ export default function JournalPage() {
             </p>
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-3">
+          <div className="grid gap-3 sm:grid-cols-4">
             <Stat label="XP" value={String(learner.xp)} />
             <Stat
               label="Scenes done"
               value={String(learner.completedMissionIds.length)}
             />
             <Stat label="Words" value={String(learner.vocab.length)} />
+            <Stat label="Due today" value={String(countDueVocab(learner.vocab))} />
           </div>
 
           <VocabPractice learner={learner} onUpdate={setLearner} />
@@ -87,7 +89,11 @@ export default function JournalPage() {
                   Finish a mission debrief to collect words.
                 </li>
               ) : (
-                learner.vocab.map((v) => (
+                learner.vocab.map((v) => {
+                  const due =
+                    !v.nextReviewAt ||
+                    new Date(v.nextReviewAt).getTime() <= Date.now();
+                  return (
                   <li
                     key={`${v.word}-${v.lastSeenAt}`}
                     className="flex items-start justify-between gap-3 py-2 text-sm"
@@ -95,6 +101,13 @@ export default function JournalPage() {
                     <div>
                       <div className="font-medium">{v.word}</div>
                       <div className="text-slate-500">{v.gloss}</div>
+                      {v.nextReviewAt ? (
+                        <div className="text-[11px] text-slate-400">
+                          {due
+                            ? "Due now"
+                            : `Next: ${new Date(v.nextReviewAt).toLocaleDateString()}`}
+                        </div>
+                      ) : null}
                     </div>
                     <span
                       className={`rounded-full px-2 py-0.5 text-xs capitalize ${
@@ -108,7 +121,8 @@ export default function JournalPage() {
                       {v.status}
                     </span>
                   </li>
-                ))
+                  );
+                })
               )}
             </ul>
           </section>
