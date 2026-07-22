@@ -45,7 +45,8 @@ Default pair: **English → Spanish**, CEFR A1–B1.
 - **Due-vocab banner** on the map; comic focus/grid + keyboard flip  
 - **Security headers** (frame deny, nosniff, HSTS, permissions-policy)  
 - **Achievements** (local), live shortcuts (H/E/1–9/?), copy mission link  
-- **Optional magic-link account** in Settings (Email OTP) for multi-device cloud profiles  
+- **Account linking**: link email to anonymous user (same id / progress) or magic-link sign-in on another device  
+
 
 
 

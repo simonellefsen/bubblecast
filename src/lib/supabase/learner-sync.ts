@@ -259,6 +259,59 @@ export async function persistLearnerProfile(
   return { ok: true };
 }
 
+/** Full cloud write of profile + relationships + vocab for the current user. */
+export async function pushFullLearnerProgress(
+  learner: LearnerProfile,
+): Promise<{ ok: boolean; error?: string }> {
+  const ensured = await ensureBubblecastUser();
+  if (!ensured?.userId) {
+    return { ok: false, error: ensured?.error ?? "Not signed in" };
+  }
+  const supabase = getSupabaseBrowserClient();
+  if (!supabase) return { ok: false, error: "Supabase not configured" };
+  const userId = ensured.userId;
+
+  const withId: LearnerProfile = {
+    ...learner,
+    id: userId,
+    updatedAt: new Date().toISOString(),
+  };
+
+  const profileResult = await persistLearnerProfile(withId);
+  if (!profileResult.ok) return profileResult;
+
+  if (withId.relationships.length) {
+    const { error: relError } = await supabase.from("bubblecast_relationships").upsert(
+      withId.relationships.map((r) => ({
+        user_id: userId,
+        character_id: r.characterId,
+        score: r.score,
+        notes: r.notes,
+      })),
+      { onConflict: "user_id,character_id" },
+    );
+    if (relError) return { ok: false, error: relError.message };
+  }
+
+  for (const v of withId.vocab.slice(0, 200)) {
+    const { error: vocabError } = await supabase.from("bubblecast_vocab").upsert(
+      {
+        user_id: userId,
+        word: v.word,
+        gloss: v.gloss,
+        status: v.status,
+        times_seen: v.timesSeen,
+        last_seen_at: v.lastSeenAt,
+        next_review_at: v.nextReviewAt ?? null,
+      },
+      { onConflict: "user_id,word" },
+    );
+    if (vocabError) return { ok: false, error: vocabError.message };
+  }
+
+  return { ok: true };
+}
+
 export async function persistDebrief(
   learner: LearnerProfile,
   missionId: string,

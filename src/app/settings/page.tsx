@@ -14,10 +14,13 @@ import {
 import { getSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase/client";
 import {
   getAuthInfo,
-  sendMagicLink,
+  linkEmailToCurrentUser,
+  sendMagicLinkForSignIn,
   signOutBubblecast,
   type AuthInfo,
 } from "@/lib/supabase/auth";
+import { pushFullLearnerProgress } from "@/lib/supabase/learner-sync";
+import { loadLearner } from "@/lib/learner-client";
 import { clearAllActiveScenes } from "@/lib/session/client-session";
 import { evaluateAchievements } from "@/lib/achievements";
 import { loadStreak } from "@/lib/streak";
@@ -144,9 +147,11 @@ export default function SettingsPage() {
           <section className="space-y-3 rounded-2xl border bg-white p-4 shadow-sm">
             <h2 className="font-semibold">Account</h2>
             <p className="text-sm text-slate-600">
-              Play anonymously by default. Optionally email a magic link so the
-              same cloud profile works on another device. Export a backup first
-              if you already have local XP.
+              Anonymous play keeps a cloud row on this device.{" "}
+              <strong className="font-medium">Link email</strong> keeps the same
+              user id (progress stays).{" "}
+              <strong className="font-medium">Sign in on another device</strong>{" "}
+              uses a magic link (export JSON first if merging).
             </p>
             <dl className="space-y-1 text-sm">
               <div className="flex justify-between gap-2">
@@ -168,16 +173,16 @@ export default function SettingsPage() {
                 </div>
               ) : null}
             </dl>
-            {authInfo?.isAnonymous !== false ? (
-              <div className="flex flex-col gap-2 sm:flex-row">
-                <input
-                  type="email"
-                  autoComplete="email"
-                  placeholder="you@example.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="flex-1 rounded-xl border px-3 py-2 text-sm"
-                />
+            <input
+              type="email"
+              autoComplete="email"
+              placeholder="you@example.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="w-full rounded-xl border px-3 py-2 text-sm"
+            />
+            <div className="flex flex-wrap gap-2">
+              {authInfo?.isAnonymous !== false ? (
                 <button
                   type="button"
                   disabled={authBusy || !email.trim()}
@@ -185,44 +190,69 @@ export default function SettingsPage() {
                   onClick={async () => {
                     setAuthBusy(true);
                     setAuthNote(null);
-                    const result = await sendMagicLink(email);
+                    // Push current progress under the anonymous id first
+                    const local = loadLearner();
+                    await pushFullLearnerProgress(local);
+                    const result = await linkEmailToCurrentUser(email);
                     setAuthBusy(false);
                     setAuthNote(
                       result.ok
-                        ? "Check your email for the magic link."
-                        : result.error ?? "Could not send link",
+                        ? "Confirmation sent. After you confirm, this same profile keeps your XP under your email."
+                        : result.error ?? "Could not link email",
                     );
+                    if (result.ok) await refreshProfile();
                   }}
                 >
-                  {authBusy ? "Sending…" : "Send magic link"}
+                  {authBusy ? "Working…" : "Link email (keep progress)"}
                 </button>
-              </div>
-            ) : (
+              ) : null}
               <button
                 type="button"
-                disabled={authBusy}
-                className="rounded-full border px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                disabled={authBusy || !email.trim()}
+                className="rounded-full border px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
                 onClick={async () => {
                   setAuthBusy(true);
-                  const result = await signOutBubblecast();
+                  setAuthNote(null);
+                  const result = await sendMagicLinkForSignIn(email);
                   setAuthBusy(false);
-                  if (!result.ok) {
-                    setAuthNote(result.error ?? "Sign out failed");
-                    return;
-                  }
-                  setAuthNote("Signed out. Next visit uses a fresh anonymous session unless you sign in again.");
-                  await refreshProfile();
+                  setAuthNote(
+                    result.ok
+                      ? "Magic link sent. Open it on the other device. Export JSON first if you need to merge XP."
+                      : result.error ?? "Could not send link",
+                  );
                 }}
               >
-                Sign out
+                Sign in on another device
               </button>
-            )}
+              {!authInfo?.isAnonymous ? (
+                <button
+                  type="button"
+                  disabled={authBusy}
+                  className="rounded-full border px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                  onClick={async () => {
+                    setAuthBusy(true);
+                    const result = await signOutBubblecast();
+                    setAuthBusy(false);
+                    if (!result.ok) {
+                      setAuthNote(result.error ?? "Sign out failed");
+                      return;
+                    }
+                    setAuthNote(
+                      "Signed out. Next visit uses anonymous unless you sign in again.",
+                    );
+                    await refreshProfile();
+                  }}
+                >
+                  Sign out
+                </button>
+              ) : null}
+            </div>
             {authNote ? (
               <p className="text-xs text-slate-500">{authNote}</p>
             ) : (
               <p className="text-xs text-slate-400">
-                Supabase → Authentication → enable Email (magic link). Add this
-                site URL to redirect allow-list.
+                Supabase → Authentication → enable Email. Add this site to the
+                redirect allow-list.
               </p>
             )}
           </section>

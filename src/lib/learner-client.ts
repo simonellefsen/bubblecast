@@ -88,44 +88,10 @@ export async function hydrateLearner(): Promise<{
           updatedAt: new Date().toISOString(),
         };
         saveLocal(migrated);
-        await persistLearnerProfile(migrated);
-        // push vocab/rels via a no-op debrief path would be heavy; profile + relationships
-        for (const r of migrated.relationships) {
-          // relationships saved in persistDebrief; do a lightweight profile persist only
-          void r;
-        }
-        // re-persist full state by saving relationships/vocab in a dedicated call
-        await persistLearnerProfile(migrated);
-        const { getSupabaseBrowserClient } = await import("@/lib/supabase/client");
-        const { ensureBubblecastUser } = await import("@/lib/supabase/learner-sync");
-        const ensured = await ensureBubblecastUser();
-        const sb = getSupabaseBrowserClient();
-        if (sb && ensured?.userId) {
-          if (migrated.relationships.length) {
-            await sb.from("bubblecast_relationships").upsert(
-              migrated.relationships.map((r) => ({
-                user_id: ensured.userId,
-                character_id: r.characterId,
-                score: r.score,
-                notes: r.notes,
-              })),
-              { onConflict: "user_id,character_id" },
-            );
-          }
-          for (const v of migrated.vocab.slice(0, 200)) {
-            await sb.from("bubblecast_vocab").upsert(
-              {
-                user_id: ensured.userId,
-                word: v.word,
-                gloss: v.gloss,
-                status: v.status,
-                times_seen: v.timesSeen,
-                last_seen_at: v.lastSeenAt,
-              },
-              { onConflict: "user_id,word" },
-            );
-          }
-        }
+        const { pushFullLearnerProgress } = await import(
+          "@/lib/supabase/learner-sync"
+        );
+        await pushFullLearnerProgress(migrated);
         return { learner: migrated, source: "supabase" };
       }
 

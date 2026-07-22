@@ -25,8 +25,7 @@ export async function getAuthInfo(): Promise<AuthInfo> {
 
   const isAnonymous =
     Boolean(user.is_anonymous) ||
-    !user.email ||
-    user.app_metadata?.provider === "anonymous";
+    (!user.email && !user.phone);
 
   return {
     userId: user.id,
@@ -35,11 +34,49 @@ export async function getAuthInfo(): Promise<AuthInfo> {
   };
 }
 
+function normalizeEmail(email: string) {
+  return email.trim().toLowerCase();
+}
+
 /**
- * Send a magic link email. Enable Email provider in Supabase Auth.
- * Redirect returns to /settings by default.
+ * Convert the current anonymous session into a permanent email account
+ * while keeping the same auth user id (and thus bubblecast.profiles row).
  */
-export async function sendMagicLink(
+export async function linkEmailToCurrentUser(
+  email: string,
+): Promise<{ ok: boolean; error?: string }> {
+  if (!isSupabaseConfigured()) {
+    return { ok: false, error: "Supabase is not configured" };
+  }
+  const supabase = getSupabaseBrowserClient();
+  if (!supabase) return { ok: false, error: "Supabase is not configured" };
+
+  const trimmed = normalizeEmail(email);
+  if (!trimmed.includes("@")) {
+    return { ok: false, error: "Enter a valid email address" };
+  }
+
+  // Ensure we have a session (anonymous) first
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (!session) {
+    return {
+      ok: false,
+      error: "No active session. Refresh the page and try again.",
+    };
+  }
+
+  const { error } = await supabase.auth.updateUser({ email: trimmed });
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
+/**
+ * Magic link for signing in on another device (may be a different user id).
+ * Use after export/import if you need to merge progress.
+ */
+export async function sendMagicLinkForSignIn(
   email: string,
   redirectTo?: string,
 ): Promise<{ ok: boolean; error?: string }> {
@@ -49,13 +86,15 @@ export async function sendMagicLink(
   const supabase = getSupabaseBrowserClient();
   if (!supabase) return { ok: false, error: "Supabase is not configured" };
 
-  const trimmed = email.trim().toLowerCase();
+  const trimmed = normalizeEmail(email);
   if (!trimmed.includes("@")) {
     return { ok: false, error: "Enter a valid email address" };
   }
 
   const origin =
-    typeof window !== "undefined" ? window.location.origin : "https://bubblecast.vercel.app";
+    typeof window !== "undefined"
+      ? window.location.origin
+      : "https://bubblecast.vercel.app";
   const { error } = await supabase.auth.signInWithOtp({
     email: trimmed,
     options: {
@@ -68,7 +107,22 @@ export async function sendMagicLink(
   return { ok: true };
 }
 
-export async function signOutBubblecast(): Promise<{ ok: boolean; error?: string }> {
+/** @deprecated prefer linkEmailToCurrentUser or sendMagicLinkForSignIn */
+export async function sendMagicLink(
+  email: string,
+  redirectTo?: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const info = await getAuthInfo();
+  if (info.isAnonymous && info.userId) {
+    return linkEmailToCurrentUser(email);
+  }
+  return sendMagicLinkForSignIn(email, redirectTo);
+}
+
+export async function signOutBubblecast(): Promise<{
+  ok: boolean;
+  error?: string;
+}> {
   if (!isSupabaseConfigured()) return { ok: true };
   const supabase = getSupabaseBrowserClient();
   if (!supabase) return { ok: true };
