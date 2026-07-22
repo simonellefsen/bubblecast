@@ -198,17 +198,27 @@ export async function startScene(opts: {
   learner: Pick<LearnerProfile, "cefr" | "displayName">;
   includeComic?: boolean;
   learnerContext?: SceneLearnerContext;
-}): Promise<SceneSession> {
+  /** When true (default), try Imagine atmosphere art for the comic. */
+  includeAtmosphere?: boolean;
+}): Promise<{
+  session: SceneSession;
+  atmosphere: Awaited<ReturnType<typeof import("./comic-atmosphere").generateComicAtmosphere>>;
+}> {
   const mission = getMission(opts.missionId);
   const wantComic = opts.includeComic !== false;
+  const wantAtmosphere = opts.includeAtmosphere !== false && wantComic;
   const learnerContext = opts.learnerContext;
 
-  // Parallel director + comic — biggest start latency win
-  const [plan, comic] = await Promise.all([
+  // Parallel director + comic script + optional atmosphere art
+  const { generateComicAtmosphere } = await import("./comic-atmosphere");
+  const [plan, comic, atmosphere] = await Promise.all([
     planScene(opts.missionId, opts.learner, learnerContext),
     wantComic
       ? generateComic(opts.missionId, learnerContext)
       : Promise.resolve(undefined as ComicScript | undefined),
+    wantAtmosphere
+      ? generateComicAtmosphere(opts.missionId)
+      : Promise.resolve(null),
   ]);
 
   const now = new Date().toISOString();
@@ -230,7 +240,7 @@ export async function startScene(opts: {
 
   const maxTurns = Math.min(mission.maxTurns, MAX_MISSION_TURNS);
 
-  return {
+  const session: SceneSession = {
     id: randomUUID(),
     missionId: mission.id,
     locationId: mission.locationId,
@@ -246,6 +256,8 @@ export async function startScene(opts: {
     createdAt: now,
     updatedAt: now,
   };
+
+  return { session, atmosphere };
 }
 
 /** Serverless-safe: mutates a copy of the client-provided session. */

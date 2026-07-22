@@ -46,6 +46,8 @@ Default pair: **English → Spanish**, CEFR A1–B1.
 - **Security headers** (frame deny, nosniff, HSTS, permissions-policy)  
 - **Achievements** (local), live shortcuts (H/E/1–9/?), copy mission link  
 - **Account linking**: link email to anonymous user (same id / progress) or magic-link sign-in on another device  
+- **Optional Imagine atmosphere** on comic warmups (`XAI_COMIC_ATMOSPHERE=0` to disable); not stored in session turns  
+
 
 
 

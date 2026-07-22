@@ -8,9 +8,12 @@ import { CharacterAvatar } from "./CharacterAvatar";
 export function ComicReader({
   comic,
   showGloss,
+  atmosphereDataUrl,
 }: {
   comic: ComicScript;
   showGloss: boolean;
+  /** Optional Imagine background — kept client-only, not in session JSON. */
+  atmosphereDataUrl?: string | null;
 }) {
   const panels = comic.panels;
   const [index, setIndex] = useState(0);
@@ -72,6 +75,20 @@ export function ComicReader({
           </button>
         </div>
       </div>
+
+      {atmosphereDataUrl ? (
+        <div className="overflow-hidden rounded-2xl border border-orange-100 shadow-sm">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={atmosphereDataUrl}
+            alt=""
+            className="max-h-56 w-full object-cover"
+          />
+          <p className="bg-orange-50/80 px-3 py-1.5 text-center text-[11px] text-orange-800/80">
+            Scene atmosphere · Imagine
+          </p>
+        </div>
+      ) : null}
 
       {mode === "focus" && panel ? (
         <div className="space-y-3">

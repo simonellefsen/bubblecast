@@ -71,6 +71,9 @@ export function MissionPlayer({ missionId }: { missionId: string }) {
   const [cefrNudge, setCefrNudge] = useState<CefrNudge | null>(null);
   const [newAchievements, setNewAchievements] = useState<Achievement[]>([]);
   const [showKeys, setShowKeys] = useState(false);
+  const [atmosphereDataUrl, setAtmosphereDataUrl] = useState<string | null>(
+    null,
+  );
   const scroller = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -137,7 +140,11 @@ export function MissionPlayer({ missionId }: { missionId: string }) {
     setPhase("loading");
     setError(null);
     try {
-      setLoadingStep("Director planning beats + comic (in parallel)…");
+      setLoadingStep(
+        includeComic
+          ? "Director + comic + atmosphere (in parallel)…"
+          : "Director planning beats…",
+      );
       const learnerContext = buildSceneLearnerContext(learner, mission.castIds);
       const res = await fetch("/api/scene/start", {
         method: "POST",
@@ -149,12 +156,20 @@ export function MissionPlayer({ missionId }: { missionId: string }) {
             displayName: learner.displayName,
           },
           includeComic,
+          includeAtmosphere: includeComic,
           learnerContext,
         }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to start");
       recordAiUsage(1);
+      // Atmosphere may cost an extra image call when enabled
+      if (data.atmosphere?.dataUrl) {
+        setAtmosphereDataUrl(data.atmosphere.dataUrl as string);
+        recordAiUsage(1);
+      } else {
+        setAtmosphereDataUrl(null);
+      }
       setLoadingStep("Setting the stage…");
       const nextPhase = data.session.comic ? "comic" : "live";
       commitSession(data.session, nextPhase);
@@ -232,6 +247,7 @@ export function MissionPlayer({ missionId }: { missionId: string }) {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed");
       commitSession(data.session, "live");
+      setAtmosphereDataUrl(null);
       setHintText(null);
       setHintLevel(0);
       setResumed(false);
@@ -239,6 +255,7 @@ export function MissionPlayer({ missionId }: { missionId: string }) {
       // Offline/local fallback if API fails
       const local = { ...session, status: "live" as const };
       commitSession(local, "live");
+      setAtmosphereDataUrl(null);
       setError(e instanceof Error ? e.message : "Could not enter scene");
     } finally {
       setBusy(false);
@@ -568,7 +585,11 @@ export function MissionPlayer({ missionId }: { missionId: string }) {
 
       {phase === "comic" && session?.comic ? (
         <div className="space-y-4">
-          <ComicReader comic={session.comic} showGloss={showGloss} />
+          <ComicReader
+            comic={session.comic}
+            showGloss={showGloss}
+            atmosphereDataUrl={atmosphereDataUrl}
+          />
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
@@ -583,6 +604,7 @@ export function MissionPlayer({ missionId }: { missionId: string }) {
               onClick={() => {
                 const next = { ...session, status: "live" as const };
                 commitSession(next, "live");
+                setAtmosphereDataUrl(null);
               }}
               className="rounded-full border bg-white px-4 py-2.5 text-sm text-slate-700"
             >

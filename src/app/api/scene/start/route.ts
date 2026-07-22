@@ -8,18 +8,29 @@ export async function POST(req: Request) {
       missionId?: string;
       learner?: Pick<LearnerProfile, "cefr" | "displayName">;
       includeComic?: boolean;
+      includeAtmosphere?: boolean;
       learnerContext?: SceneLearnerContext;
     };
     if (!body.missionId) {
       return NextResponse.json({ error: "missionId required" }, { status: 400 });
     }
-    const session = await startScene({
+    const { session, atmosphere } = await startScene({
       missionId: body.missionId,
       learner: body.learner ?? { cefr: "A1", displayName: "Traveler" },
       includeComic: body.includeComic,
+      includeAtmosphere: body.includeAtmosphere,
       learnerContext: body.learnerContext,
     });
-    return NextResponse.json({ session });
+    // Atmosphere kept out of session so turn/end payloads stay small
+    return NextResponse.json({
+      session,
+      atmosphere: atmosphere
+        ? {
+            mediaType: atmosphere.mediaType,
+            dataUrl: `data:${atmosphere.mediaType};base64,${atmosphere.base64}`,
+          }
+        : null,
+    });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Failed to start scene";
     return NextResponse.json({ error: message }, { status: 500 });
