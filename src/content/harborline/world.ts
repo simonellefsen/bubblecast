@@ -219,7 +219,9 @@ export const harborline: WorldPack = {
       ],
       difficulty: "A2",
       maxTurns: 8,
-      unlockedByDefault: true,
+      unlockedByDefault: false,
+      requiresMissionIds: ["cafe-breakfast"],
+      unlockHint: "Complete “Order breakfast” with Mira first.",
     },
     {
       id: "station-delay",
@@ -257,7 +259,9 @@ export const harborline: WorldPack = {
       ],
       difficulty: "A2",
       maxTurns: 10,
-      unlockedByDefault: true,
+      unlockedByDefault: false,
+      requiresMissionIds: ["cafe-breakfast"],
+      unlockHint: "Finish your first café mission to unlock the station.",
     },
     {
       id: "hotel-checkin",
@@ -295,7 +299,9 @@ export const harborline: WorldPack = {
       ],
       difficulty: "A2",
       maxTurns: 10,
-      unlockedByDefault: true,
+      unlockedByDefault: false,
+      requiresMissionIds: ["station-delay"],
+      unlockHint: "Clear the station delay scene first.",
     },
     {
       id: "cowork-meeting",
@@ -333,7 +339,9 @@ export const harborline: WorldPack = {
       ],
       difficulty: "B1",
       maxTurns: 10,
-      unlockedByDefault: true,
+      unlockedByDefault: false,
+      requiresMissionIds: ["hotel-checkin"],
+      unlockHint: "Check in at Hotel Bruma to unlock cowork missions.",
     },
     {
       id: "market-allergies",
@@ -371,7 +379,9 @@ export const harborline: WorldPack = {
       ],
       difficulty: "A2",
       maxTurns: 10,
-      unlockedByDefault: true,
+      unlockedByDefault: false,
+      requiresMissionIds: ["cafe-complaint", "station-delay"],
+      unlockHint: "Complete café complaint and station delay first.",
     },
   ],
 };
@@ -380,6 +390,30 @@ export function getMission(missionId: string) {
   const mission = harborline.missions.find((m) => m.id === missionId);
   if (!mission) throw new Error(`Unknown mission: ${missionId}`);
   return mission;
+}
+
+export function isMissionUnlocked(
+  missionId: string,
+  completedMissionIds: string[],
+): boolean {
+  const mission = harborline.missions.find((m) => m.id === missionId);
+  if (!mission) return false;
+  if (mission.unlockedByDefault && !mission.requiresMissionIds?.length) {
+    return true;
+  }
+  const required = mission.requiresMissionIds ?? [];
+  return required.every((id) => completedMissionIds.includes(id));
+}
+
+export function missingUnlocks(
+  missionId: string,
+  completedMissionIds: string[],
+): string[] {
+  const mission = harborline.missions.find((m) => m.id === missionId);
+  if (!mission?.requiresMissionIds?.length) return [];
+  return mission.requiresMissionIds.filter(
+    (id) => !completedMissionIds.includes(id),
+  );
 }
 
 export function getLocation(locationId: string) {

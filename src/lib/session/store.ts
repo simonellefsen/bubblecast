@@ -32,15 +32,24 @@ export function applyDebriefToLearner(
     completed.add(missionId);
   }
 
+  const missionTitle =
+    harborline.missions.find((m) => m.id === missionId)?.title ?? missionId;
+  const noteSnippet = (debrief.castReaction || debrief.summary || "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 120);
+
   const relationships = learner.relationships.map((rel) => {
     const delta = debrief.relationshipDeltas.find(
       (d) => d.characterId === rel.characterId,
     );
     if (!delta) return rel;
-    return {
-      ...rel,
-      score: Math.max(0, Math.min(100, rel.score + delta.delta)),
-    };
+    const score = Math.max(0, Math.min(100, rel.score + delta.delta));
+    const stamp = `${missionTitle}: ${
+      noteSnippet || (delta.delta >= 0 ? "good scene together" : "awkward beat")
+    }`;
+    const notes = [stamp, rel.notes].filter(Boolean).join(" · ").slice(0, 280);
+    return { ...rel, score, notes };
   });
 
   const vocab = [...learner.vocab];

@@ -25,6 +25,10 @@ Default pair: **English → Spanish**, CEFR A1–B1.
 - **Journal practice**: flip cards, mark new/fuzzy/known (syncs to Supabase)  
 - **Hub continuity**: resume in-progress missions from the map; cloud debrief history  
 - **Mission brief**: review goals/cast/phrases before AI spend; cast uses bond + focus vocab  
+- **Unlock path**: café → station → hotel → cowork; market needs two prior missions  
+- **Cast memory notes**: debriefs stamp relationship notes shown on Cast page  
+- **PWA manifest**: standalone home-screen install (`/manifest.webmanifest`)  
+
 
 
 

@@ -7,6 +7,7 @@ import {
   getLocation,
   getMission,
   harborline,
+  isMissionUnlocked,
 } from "@/content/harborline/world";
 import type {
   DebriefPacket,
@@ -102,6 +103,10 @@ export function MissionPlayer({ missionId }: { missionId: string }) {
 
   async function startFromBrief() {
     if (!learner || busy) return;
+    if (!isMissionUnlocked(missionId, learner.completedMissionIds)) {
+      setError(mission.unlockHint ?? "Mission locked");
+      return;
+    }
     setBusy(true);
     setPhase("loading");
     setError(null);
@@ -349,6 +354,7 @@ export function MissionPlayer({ missionId }: { missionId: string }) {
   }
 
   if (phase === "brief") {
+    const locked = !isMissionUnlocked(missionId, learner.completedMissionIds);
     return (
       <MissionBrief
         mission={mission}
@@ -359,6 +365,8 @@ export function MissionPlayer({ missionId }: { missionId: string }) {
         onStart={() => void startFromBrief()}
         includeComic={includeComic}
         onIncludeComicChange={setIncludeComic}
+        locked={locked}
+        lockHint={mission.unlockHint}
       />
     );
   }

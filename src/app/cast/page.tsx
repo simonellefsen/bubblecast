@@ -58,6 +58,11 @@ export default function CastPage() {
                   <p className="mt-2 text-xs text-slate-500">
                     Hook: {c.teachingHook}
                   </p>
+                  {rel?.notes ? (
+                    <p className="mt-2 line-clamp-2 text-xs italic text-slate-500">
+                      Memory: {rel.notes}
+                    </p>
+                  ) : null}
                   <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100">
                     <div
                       className="h-full rounded-full transition-all"

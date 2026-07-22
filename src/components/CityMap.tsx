@@ -1,11 +1,16 @@
 "use client";
 
 import Link from "next/link";
-import { harborline } from "@/content/harborline/world";
+import {
+  harborline,
+  isMissionUnlocked,
+} from "@/content/harborline/world";
 import type { LearnerProfile } from "@/content/types";
 import { ActiveMissionBanner } from "./ActiveMissionBanner";
 
 export function CityMap({ learner }: { learner: LearnerProfile }) {
+  const completed = learner.completedMissionIds;
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
@@ -15,13 +20,14 @@ export function CityMap({ learner }: { learner: LearnerProfile }) {
           </p>
           <h1 className="text-3xl font-semibold tracking-tight">City map</h1>
           <p className="mt-1 max-w-xl text-slate-600">
-            Pick a place. Comics warm you up, live scenes put you on stage, missions decide if you pulled it off.
+            Missions unlock as you progress. Start at Mercado Café, then expand
+            across the city.
           </p>
         </div>
         <div className="rounded-2xl border border-orange-100 bg-white px-4 py-3 text-sm shadow-sm">
           <div className="font-semibold">{learner.displayName}</div>
           <div className="text-slate-500">
-            CEFR {learner.cefr} · {learner.xp} XP · {learner.completedMissionIds.length} scenes
+            CEFR {learner.cefr} · {learner.xp} XP · {completed.length} scenes
           </div>
         </div>
       </div>
@@ -32,6 +38,9 @@ export function CityMap({ learner }: { learner: LearnerProfile }) {
         <div className="pointer-events-none absolute inset-0 opacity-40 [background-image:radial-gradient(#94a3b8_1px,transparent_1px)] [background-size:18px_18px]" />
         {harborline.locations.map((loc) => {
           const missions = harborline.missions.filter((m) => m.locationId === loc.id);
+          const anyUnlocked = missions.some((m) =>
+            isMissionUnlocked(m.id, completed),
+          );
           return (
             <div
               key={loc.id}
@@ -41,7 +50,9 @@ export function CityMap({ learner }: { learner: LearnerProfile }) {
               <div className="group relative">
                 <button
                   type="button"
-                  className="flex h-14 w-14 items-center justify-center rounded-2xl border-2 border-white bg-white/90 text-2xl shadow-lg transition group-hover:scale-110"
+                  className={`flex h-14 w-14 items-center justify-center rounded-2xl border-2 border-white text-2xl shadow-lg transition group-hover:scale-110 ${
+                    anyUnlocked ? "bg-white/90" : "bg-slate-200/90 grayscale"
+                  }`}
                   title={loc.name}
                 >
                   {loc.emoji}
@@ -51,7 +62,19 @@ export function CityMap({ learner }: { learner: LearnerProfile }) {
                   <p className="mt-1 text-xs text-slate-500">{loc.blurb}</p>
                   <ul className="mt-2 space-y-1">
                     {missions.map((m) => {
-                      const done = learner.completedMissionIds.includes(m.id);
+                      const done = completed.includes(m.id);
+                      const unlocked = isMissionUnlocked(m.id, completed);
+                      if (!unlocked) {
+                        return (
+                          <li
+                            key={m.id}
+                            className="rounded-lg px-2 py-1.5 text-sm text-slate-400"
+                            title={m.unlockHint}
+                          >
+                            🔒 {m.title}
+                          </li>
+                        );
+                      }
                       return (
                         <li key={m.id}>
                           <Link
@@ -60,7 +83,9 @@ export function CityMap({ learner }: { learner: LearnerProfile }) {
                           >
                             <span>
                               {m.title}{" "}
-                              <span className="text-xs text-slate-400">{m.difficulty}</span>
+                              <span className="text-xs text-slate-400">
+                                {m.difficulty}
+                              </span>
                             </span>
                             {done ? (
                               <span className="text-xs text-emerald-600">replay</span>
@@ -85,7 +110,33 @@ export function CityMap({ learner }: { learner: LearnerProfile }) {
       <section className="grid gap-3 sm:grid-cols-2">
         {harborline.missions.map((m) => {
           const loc = harborline.locations.find((l) => l.id === m.locationId)!;
-          const done = learner.completedMissionIds.includes(m.id);
+          const done = completed.includes(m.id);
+          const unlocked = isMissionUnlocked(m.id, completed);
+          if (!unlocked) {
+            return (
+              <div
+                key={m.id}
+                className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/80 p-4 opacity-80"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <div className="text-xs font-medium uppercase tracking-wide text-slate-400">
+                      {loc.emoji} {loc.name}
+                    </div>
+                    <h3 className="mt-1 font-semibold text-slate-500">
+                      🔒 {m.title}
+                    </h3>
+                    <p className="mt-1 text-sm text-slate-500">
+                      {m.unlockHint ?? "Complete earlier missions to unlock."}
+                    </p>
+                  </div>
+                  <span className="rounded-full bg-slate-200 px-2 py-0.5 text-xs font-medium text-slate-500">
+                    {m.difficulty}
+                  </span>
+                </div>
+              </div>
+            );
+          }
           return (
             <Link
               key={m.id}

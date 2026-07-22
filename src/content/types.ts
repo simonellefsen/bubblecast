@@ -68,6 +68,9 @@ export interface MissionTemplate {
   difficulty: CefrLevel;
   maxTurns: number;
   unlockedByDefault: boolean;
+  /** Mission ids that must be completed (success or partial) first. */
+  requiresMissionIds?: string[];
+  unlockHint?: string;
 }
 
 export interface WorldPack {

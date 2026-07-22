@@ -18,6 +18,7 @@ export const metadata: Metadata = {
   description:
     "Learn languages through AI comic snippets, live speech-bubble scenes, and mission-based tasks with a recurring cast.",
   applicationName: "Bubblecast",
+  manifest: "/manifest.webmanifest",
   appleWebApp: {
     capable: true,
     title: "Bubblecast",

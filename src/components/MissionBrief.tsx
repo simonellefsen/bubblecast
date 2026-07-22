@@ -13,6 +13,8 @@ export function MissionBrief({
   onStart,
   includeComic,
   onIncludeComicChange,
+  locked,
+  lockHint,
 }: {
   mission: MissionTemplate;
   location: Location;
@@ -22,6 +24,8 @@ export function MissionBrief({
   onStart: () => void;
   includeComic: boolean;
   onIncludeComicChange: (v: boolean) => void;
+  locked?: boolean;
+  lockHint?: string;
 }) {
   return (
     <div className="mx-auto max-w-2xl space-y-5">
@@ -32,6 +36,19 @@ export function MissionBrief({
         <h1 className="mt-1 text-3xl font-semibold tracking-tight">{mission.title}</h1>
         <p className="mt-2 text-slate-600">{mission.blurb}</p>
       </div>
+
+      {locked ? (
+        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
+          <p className="font-semibold">🔒 Mission locked</p>
+          <p className="mt-1">{lockHint ?? "Complete earlier missions to unlock."}</p>
+          <Link
+            href="/play"
+            className="mt-3 inline-block text-orange-700 hover:underline"
+          >
+            ← Back to map
+          </Link>
+        </div>
+      ) : null}
 
       <div className="rounded-2xl border border-orange-100 bg-orange-50/50 p-4">
         <h2 className="text-xs font-semibold uppercase tracking-wide text-orange-700">
@@ -87,31 +104,35 @@ export function MissionBrief({
         </ul>
       </div>
 
-      <label className="flex items-center gap-2 text-sm text-slate-600">
-        <input
-          type="checkbox"
-          checked={includeComic}
-          onChange={(e) => onIncludeComicChange(e.target.checked)}
-        />
-        Comic warmup first (recommended)
-      </label>
+      {!locked ? (
+        <>
+          <label className="flex items-center gap-2 text-sm text-slate-600">
+            <input
+              type="checkbox"
+              checked={includeComic}
+              onChange={(e) => onIncludeComicChange(e.target.checked)}
+            />
+            Comic warmup first (recommended)
+          </label>
 
-      <div className="flex flex-wrap gap-3">
-        <button
-          type="button"
-          disabled={busy}
-          onClick={onStart}
-          className="rounded-full bg-orange-500 px-6 py-3 text-sm font-semibold text-white shadow hover:bg-orange-600 disabled:opacity-60"
-        >
-          {busy ? "Starting…" : "Start scene →"}
-        </button>
-        <Link
-          href="/play"
-          className="rounded-full border bg-white px-5 py-3 text-sm text-slate-700"
-        >
-          Back to map
-        </Link>
-      </div>
+          <div className="flex flex-wrap gap-3">
+            <button
+              type="button"
+              disabled={busy}
+              onClick={onStart}
+              className="rounded-full bg-orange-500 px-6 py-3 text-sm font-semibold text-white shadow hover:bg-orange-600 disabled:opacity-60"
+            >
+              {busy ? "Starting…" : "Start scene →"}
+            </button>
+            <Link
+              href="/play"
+              className="rounded-full border bg-white px-5 py-3 text-sm text-slate-700"
+            >
+              Back to map
+            </Link>
+          </div>
+        </>
+      ) : null}
 
       <p className="text-xs text-slate-400">
         Playing as {learner.displayName} · CEFR {learner.cefr} · {learner.xp} XP
