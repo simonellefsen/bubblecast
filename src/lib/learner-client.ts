@@ -14,6 +14,12 @@ import {
 
 const KEY = "bubblecast-learner-v1";
 
+export type ProgressBackup = {
+  version: 1;
+  exportedAt: string;
+  learner: LearnerProfile;
+};
+
 function loadLocal(): LearnerProfile {
   if (typeof window === "undefined") return createDefaultLearner();
   try {
@@ -174,6 +180,48 @@ export function updateVocabStatus(
     if (entry) void persistVocabEntry(entry);
   }
   return next;
+}
+
+export function exportProgressBackup(): ProgressBackup {
+  return {
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    learner: loadLocal(),
+  };
+}
+
+export function importProgressBackup(raw: unknown): {
+  ok: true;
+  learner: LearnerProfile;
+} | {
+  ok: false;
+  error: string;
+} {
+  try {
+    const data = raw as ProgressBackup;
+    if (!data || data.version !== 1 || !data.learner?.displayName) {
+      return { ok: false, error: "Not a valid Bubblecast backup (v1)." };
+    }
+    const learner: LearnerProfile = {
+      ...createDefaultLearner(),
+      ...data.learner,
+      vocab: Array.isArray(data.learner.vocab) ? data.learner.vocab : [],
+      relationships: Array.isArray(data.learner.relationships)
+        ? data.learner.relationships
+        : createDefaultLearner().relationships,
+      completedMissionIds: Array.isArray(data.learner.completedMissionIds)
+        ? data.learner.completedMissionIds
+        : [],
+      updatedAt: new Date().toISOString(),
+    };
+    saveLocal(learner);
+    if (isSupabaseConfigured()) {
+      void persistLearnerProfile(learner);
+    }
+    return { ok: true, learner };
+  } catch {
+    return { ok: false, error: "Could not parse backup file." };
+  }
 }
 
 export async function resetLearner(): Promise<LearnerProfile> {

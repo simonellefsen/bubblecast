@@ -3,8 +3,15 @@
 import { useEffect, useState } from "react";
 import { AppShell } from "@/components/AppShell";
 import type { CefrLevel, LearnerProfile } from "@/content/types";
-import { hydrateLearner, resetLearner, saveLearner } from "@/lib/learner-client";
+import {
+  exportProgressBackup,
+  hydrateLearner,
+  importProgressBackup,
+  resetLearner,
+  saveLearner,
+} from "@/lib/learner-client";
 import { isSupabaseConfigured } from "@/lib/supabase/client";
+import { loadStreak } from "@/lib/streak";
 
 const levels: CefrLevel[] = ["A1", "A2", "B1", "B2"];
 
@@ -16,6 +23,8 @@ export default function SettingsPage() {
   } | null>(null);
   const [saved, setSaved] = useState(false);
   const [cloudNote, setCloudNote] = useState<string | null>(null);
+  const [backupNote, setBackupNote] = useState<string | null>(null);
+  const [streak, setStreak] = useState(0);
   const supabaseOn = isSupabaseConfigured();
 
   useEffect(() => {
@@ -29,6 +38,7 @@ export default function SettingsPage() {
       else if (supabaseOn) setCloudNote("Using local cache");
       else setCloudNote("Supabase env not set — local only");
     })();
+    setStreak(loadStreak().count);
     fetch("/api/health")
       .then((r) => r.json())
       .then(setHealth)
@@ -37,6 +47,37 @@ export default function SettingsPage() {
       cancelled = true;
     };
   }, [supabaseOn]);
+
+  function downloadBackup() {
+    const backup = exportProgressBackup();
+    const blob = new Blob([JSON.stringify(backup, null, 2)], {
+      type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `bubblecast-progress-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    setBackupNote("Backup downloaded");
+  }
+
+  async function onImportFile(file: File | null) {
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const parsed = JSON.parse(text) as unknown;
+      const result = importProgressBackup(parsed);
+      if (!result.ok) {
+        setBackupNote(result.error);
+        return;
+      }
+      setLearner(result.learner);
+      setBackupNote("Backup restored (local + cloud profile if configured)");
+    } catch {
+      setBackupNote("Invalid JSON file");
+    }
+  }
 
   function update<K extends keyof LearnerProfile>(key: K, value: LearnerProfile[K]) {
     if (!learner) return;
@@ -128,6 +169,7 @@ export default function SettingsPage() {
             </label>
             <p className="text-xs text-slate-500">
               Target: Spanish · L1: English · XP: {learner.xp}
+              {streak > 0 ? ` · 🔥 ${streak}d` : ""}
               {learner.id !== "local-learner" ? (
                 <span className="ml-1 font-mono text-[10px] text-slate-400">
                   · {learner.id.slice(0, 8)}…
@@ -144,6 +186,35 @@ export default function SettingsPage() {
             </button>
           </section>
         ) : null}
+
+        <section className="space-y-3 rounded-2xl border bg-white p-4 shadow-sm">
+          <h2 className="font-semibold">Backup</h2>
+          <p className="text-sm text-slate-600">
+            Export a JSON snapshot of local progress (XP, missions, vocab, bonds).
+            Import on another device or after clearing browser data.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={downloadBackup}
+              className="rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white"
+            >
+              Export JSON
+            </button>
+            <label className="cursor-pointer rounded-full border px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
+              Import JSON
+              <input
+                type="file"
+                accept="application/json,.json"
+                className="hidden"
+                onChange={(e) => void onImportFile(e.target.files?.[0] ?? null)}
+              />
+            </label>
+          </div>
+          {backupNote ? (
+            <p className="text-xs text-slate-500">{backupNote}</p>
+          ) : null}
+        </section>
 
         <section className="rounded-2xl border bg-white p-4 shadow-sm">
           <h2 className="font-semibold">Phone install</h2>

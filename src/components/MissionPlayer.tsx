@@ -57,6 +57,7 @@ export function MissionPlayer({ missionId }: { missionId: string }) {
   const [unlockedNow, setUnlockedNow] = useState<MissionTemplate[]>([]);
   const [streakCount, setStreakCount] = useState(0);
   const scroller = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   function commitSession(
     next: SceneSession,
@@ -273,6 +274,8 @@ export function MissionPlayer({ missionId }: { missionId: string }) {
     } finally {
       setBusy(false);
       setStreaming(false);
+      // Mobile-friendly: return focus for the next reply
+      requestAnimationFrame(() => inputRef.current?.focus());
     }
   }
 
@@ -559,11 +562,14 @@ export function MissionPlayer({ missionId }: { missionId: string }) {
               className="flex flex-col gap-2 border-t border-white/50 bg-white/80 p-3 sm:flex-row"
             >
               <input
+                ref={inputRef}
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 placeholder="Reply in Spanish (English ok — cast will model Spanish)…"
                 className="flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none ring-orange-300 focus:ring-2"
                 disabled={busy || session.status === "ended"}
+                enterKeyHint="send"
+                autoComplete="off"
               />
               <div className="flex gap-2">
                 <button
