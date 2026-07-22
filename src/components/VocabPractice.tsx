@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import type { LearnerProfile, VocabEntry } from "@/content/types";
 import { updateVocabStatus } from "@/lib/learner-client";
+import { recordActivity } from "@/lib/streak";
 
 function shuffle<T>(items: T[]): T[] {
   const arr = [...items];
@@ -81,6 +82,7 @@ export function VocabPractice({
   function grade(status: VocabEntry["status"]) {
     const next = updateVocabStatus(learner, card.word, status);
     onUpdate(next);
+    recordActivity();
     setFlipped(false);
     setDone((d) => d + 1);
     setIndex((i) => i + 1);

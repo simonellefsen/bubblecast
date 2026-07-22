@@ -28,6 +28,9 @@ Default pair: **English → Spanish**, CEFR A1–B1.
 - **Unlock path**: café → station → hotel → cowork; market needs two prior missions  
 - **Cast memory notes**: debriefs stamp relationship notes shown on Cast page  
 - **PWA manifest**: standalone home-screen install (`/manifest.webmanifest`)  
+- **Unlock celebration**: debrief lists newly opened missions + next CTA  
+- **Night ferry** endgame mission; daily activity streak on the map  
+
 
 
 

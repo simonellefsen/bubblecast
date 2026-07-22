@@ -1,15 +1,22 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import {
   harborline,
   isMissionUnlocked,
 } from "@/content/harborline/world";
 import type { LearnerProfile } from "@/content/types";
+import { loadStreak } from "@/lib/streak";
 import { ActiveMissionBanner } from "./ActiveMissionBanner";
 
 export function CityMap({ learner }: { learner: LearnerProfile }) {
   const completed = learner.completedMissionIds;
+  const [streak, setStreak] = useState(0);
+
+  useEffect(() => {
+    setStreak(loadStreak().count);
+  }, []);
 
   return (
     <div className="space-y-6">
@@ -21,13 +28,14 @@ export function CityMap({ learner }: { learner: LearnerProfile }) {
           <h1 className="text-3xl font-semibold tracking-tight">City map</h1>
           <p className="mt-1 max-w-xl text-slate-600">
             Missions unlock as you progress. Start at Mercado Café, then expand
-            across the city.
+            across the city — end at the night ferry.
           </p>
         </div>
         <div className="rounded-2xl border border-orange-100 bg-white px-4 py-3 text-sm shadow-sm">
           <div className="font-semibold">{learner.displayName}</div>
           <div className="text-slate-500">
             CEFR {learner.cefr} · {learner.xp} XP · {completed.length} scenes
+            {streak > 0 ? ` · 🔥 ${streak}d` : ""}
           </div>
         </div>
       </div>

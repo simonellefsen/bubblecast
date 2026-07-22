@@ -8,10 +8,12 @@ import {
   getMission,
   harborline,
   isMissionUnlocked,
+  newlyUnlockedMissions,
 } from "@/content/harborline/world";
 import type {
   DebriefPacket,
   LearnerProfile,
+  MissionTemplate,
   SceneSession,
 } from "@/content/types";
 import { hydrateLearner, saveLearnerAfterDebrief } from "@/lib/learner-client";
@@ -22,6 +24,7 @@ import {
   saveActiveScene,
 } from "@/lib/session/client-session";
 import { applyDebriefToLearner } from "@/lib/session/store";
+import { recordActivity } from "@/lib/streak";
 import { CharacterAvatar } from "./CharacterAvatar";
 import { ComicReader } from "./ComicReader";
 import { MissionBrief } from "./MissionBrief";
@@ -51,6 +54,8 @@ export function MissionPlayer({ missionId }: { missionId: string }) {
   const [streaming, setStreaming] = useState(false);
   const [includeComic, setIncludeComic] = useState(true);
   const [loadingStep, setLoadingStep] = useState("Checking traveler profile…");
+  const [unlockedNow, setUnlockedNow] = useState<MissionTemplate[]>([]);
+  const [streakCount, setStreakCount] = useState(0);
   const scroller = useRef<HTMLDivElement>(null);
 
   function commitSession(
@@ -310,7 +315,13 @@ export function MissionPlayer({ missionId }: { missionId: string }) {
       if (!res.ok) throw new Error(data.error || "End failed");
       commitSession(data.session, "debrief");
       setDebrief(data.debrief);
+      const prevCompleted = learner.completedMissionIds;
       const updated = applyDebriefToLearner(learner, data.debrief, mission.id);
+      setUnlockedNow(
+        newlyUnlockedMissions(prevCompleted, updated.completedMissionIds),
+      );
+      const streak = recordActivity();
+      setStreakCount(streak.count);
       const { error: syncError } = await saveLearnerAfterDebrief(
         updated,
         mission.id,
@@ -612,7 +623,12 @@ export function MissionPlayer({ missionId }: { missionId: string }) {
       ) : null}
 
       {phase === "debrief" && debrief ? (
-        <DebriefView debrief={debrief} missionTitle={mission.title} />
+        <DebriefView
+          debrief={debrief}
+          missionTitle={mission.title}
+          unlocked={unlockedNow}
+          streakCount={streakCount}
+        />
       ) : null}
     </div>
   );
@@ -641,9 +657,13 @@ function TargetPhrases({ phrases }: { phrases: string[] }) {
 function DebriefView({
   debrief,
   missionTitle,
+  unlocked,
+  streakCount,
 }: {
   debrief: DebriefPacket;
   missionTitle: string;
+  unlocked: MissionTemplate[];
+  streakCount: number;
 }) {
   const tone =
     debrief.outcome === "success"
@@ -663,7 +683,39 @@ function DebriefView({
         </h2>
         <p className="mt-2 text-slate-700">{debrief.summary}</p>
         <p className="mt-3 text-sm italic text-slate-600">{debrief.castReaction}</p>
+        {streakCount > 0 ? (
+          <p className="mt-3 text-sm font-medium text-slate-700">
+            🔥 {streakCount}-day streak
+          </p>
+        ) : null}
       </div>
+
+      {unlocked.length > 0 ? (
+        <div className="rounded-2xl border border-sky-200 bg-sky-50 p-4 shadow-sm">
+          <h3 className="font-semibold text-sky-900">New places unlocked</h3>
+          <ul className="mt-3 space-y-2">
+            {unlocked.map((m) => {
+              const loc = harborline.locations.find((l) => l.id === m.locationId);
+              return (
+                <li key={m.id}>
+                  <Link
+                    href={`/play/mission/${m.id}`}
+                    className="flex items-center justify-between rounded-xl border border-sky-100 bg-white px-3 py-2 text-sm hover:border-sky-300"
+                  >
+                    <span>
+                      {loc?.emoji} <span className="font-medium">{m.title}</span>
+                      <span className="ml-2 text-xs text-slate-400">
+                        {m.difficulty}
+                      </span>
+                    </span>
+                    <span className="text-sky-700">Play →</span>
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      ) : null}
 
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="rounded-2xl border bg-white p-4 shadow-sm">
@@ -712,6 +764,14 @@ function DebriefView({
       ) : null}
 
       <div className="flex flex-wrap gap-2">
+        {unlocked[0] ? (
+          <Link
+            href={`/play/mission/${unlocked[0].id}`}
+            className="rounded-full bg-sky-600 px-5 py-2.5 text-sm font-semibold text-white"
+          >
+            Next unlock →
+          </Link>
+        ) : null}
         <Link
           href="/play"
           className="rounded-full bg-orange-500 px-5 py-2.5 text-sm font-semibold text-white"

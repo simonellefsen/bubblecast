@@ -28,11 +28,12 @@ function formatLearnerContext(ctx?: SceneLearnerContext) {
       score: r.score,
       warmth:
         r.score >= 70 ? "warm friend" : r.score >= 40 ? "familiar" : "new acquaintance",
-      notes: r.notes || undefined,
+      // Short running memory from prior debriefs
+      memory: r.notes ? r.notes.slice(0, 160) : undefined,
     })),
     focusVocab: ctx.focusVocab,
     instruction:
-      "If relationship score is high, be warmer/more informal. If low, more polite distance. Gently reuse 1 focusVocab item when natural — do not force a vocab quiz.",
+      "If relationship score is high, be warmer/more informal. If low, more polite distance. Reference memory notes lightly if present (do not lecture about past scenes). Gently reuse 1 focusVocab item when natural — do not force a vocab quiz.",
   };
 }
 
@@ -115,7 +116,8 @@ export function actorSystemPrompt(session: SceneSession, cast: Character[]) {
   const relLine = ctx?.relationships
     ?.map((r) => {
       const name = cast.find((c) => c.id === r.characterId)?.name ?? r.characterId;
-      return `${name}:${r.score}`;
+      const mem = r.notes ? ` mem="${r.notes.slice(0, 80)}"` : "";
+      return `${name}:${r.score}${mem}`;
     })
     .join(", ");
   const vocabLine = ctx?.focusVocab
@@ -132,7 +134,7 @@ If the learner writes English, respond in simple Spanish and gently model the Sp
 Set sceneShouldEnd=true when mission goals are mostly met or turn budget is nearly exhausted and a natural close exists.
 CEFR: ${session.cefr}. Learner: ${ctx?.displayName ?? "Traveler"}. Mission: ${mission.title}. Goal: ${mission.learnerGoal}.
 Cast: ${cast.map((c) => `${c.name} (${c.id}): ${c.traits.join(", ")}`).join("; ")}.
-Relationships (0-100): ${relLine || "default"}.
+Relationships (0-100) + memory snippets: ${relLine || "default"}.
 Focus vocab to reuse gently: ${vocabLine || "none"}.
 Open beats: ${session.beats.map((b) => `${b.id}:${b.goal}${b.completed ? " [done]" : ""}`).join(" | ")}.`;
 }

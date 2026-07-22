@@ -383,6 +383,46 @@ export const harborline: WorldPack = {
       requiresMissionIds: ["cafe-complaint", "station-delay"],
       unlockHint: "Complete café complaint and station delay first.",
     },
+    {
+      id: "night-ferry-chat",
+      title: "Ferry small talk",
+      locationId: "night-ferry",
+      castIds: ["sofia", "luis"],
+      blurb: "Evening crossing. Make small talk and accept or decline a plan.",
+      learnerGoal: "Chat casually and agree on a simple social plan (or decline politely).",
+      learningGoals: [
+        "Open small talk",
+        "Share a simple opinion",
+        "Accept or decline an invitation",
+      ],
+      targetPhrases: [
+        "¿Vienes a menudo por aquí?",
+        "Me parece bien",
+        "Esta noche no puedo, ¿mañana?",
+      ],
+      successCriteria: [
+        {
+          id: "open-chat",
+          description: "Starts or sustains small talk",
+          weight: 2,
+        },
+        {
+          id: "opinion",
+          description: "Shares a simple opinion or preference",
+          weight: 1,
+        },
+        {
+          id: "plan",
+          description: "Accepts, declines, or proposes an alternative plan",
+          weight: 2,
+        },
+      ],
+      difficulty: "B1",
+      maxTurns: 10,
+      unlockedByDefault: false,
+      requiresMissionIds: ["cowork-meeting", "market-allergies"],
+      unlockHint: "Finish cowork reschedule and market allergies first.",
+    },
   ],
 };
 
@@ -414,6 +454,18 @@ export function missingUnlocks(
   return mission.requiresMissionIds.filter(
     (id) => !completedMissionIds.includes(id),
   );
+}
+
+/** Missions that became unlocked after completing `justCompletedId`. */
+export function newlyUnlockedMissions(
+  previousCompleted: string[],
+  nextCompleted: string[],
+) {
+  return harborline.missions.filter((m) => {
+    const wasLocked = !isMissionUnlocked(m.id, previousCompleted);
+    const nowOpen = isMissionUnlocked(m.id, nextCompleted);
+    return wasLocked && nowOpen;
+  });
 }
 
 export function getLocation(locationId: string) {
