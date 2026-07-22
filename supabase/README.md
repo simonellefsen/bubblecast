@@ -15,7 +15,9 @@ Migrations in this folder are the source of truth for Bubblecast. Apply only the
 ## Dashboard one-time setup
 
 1. **Authentication → Providers → Anonymous** — enable Anonymous sign-ins (lazy device identity, no password).
-2. Optional: add schema `bubblecast` under **Settings → API → Exposed schemas** if you later query the schema directly (views already work via `public`).
+2. **Authentication → Providers → Email** — enable magic link (optional multi-device accounts).
+3. **Authentication → URL configuration** — site URL + redirect allow-list for production and localhost.
+4. Optional: add schema `bubblecast` under **Settings → API → Exposed schemas** if you later query the schema directly (views already work via `public`).
 
 ## Env vars (Vercel + `.env.local`)
 

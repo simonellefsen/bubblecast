@@ -45,6 +45,8 @@ Default pair: **English → Spanish**, CEFR A1–B1.
 - **Due-vocab banner** on the map; comic focus/grid + keyboard flip  
 - **Security headers** (frame deny, nosniff, HSTS, permissions-policy)  
 - **Achievements** (local), live shortcuts (H/E/1–9/?), copy mission link  
+- **Optional magic-link account** in Settings (Email OTP) for multi-device cloud profiles  
+
 
 
 
@@ -80,8 +82,10 @@ Open [http://localhost:3000](http://localhost:3000).
 Bubblecast is an isolated tenant — see [`supabase/README.md`](./supabase/README.md).
 
 1. Enable **Anonymous** sign-ins (Auth → Providers).  
-2. Set the two `NEXT_PUBLIC_SUPABASE_*` env vars (Vercel + local).  
-3. Migrations live in `supabase/migrations/` (already applied to the Shared project via MCP).  
+2. Optional: enable **Email** magic links for multi-device accounts (Settings → Account).  
+3. Add site URL / redirect allow-list: `https://bubblecast.vercel.app/**` and `http://localhost:3000/**`.  
+4. Set the two `NEXT_PUBLIC_SUPABASE_*` env vars (Vercel + local).  
+5. Migrations live in `supabase/migrations/` (Bubblecast schema only).  
 
 Get an xAI key at [console.x.ai](https://console.x.ai). Without it, scenes use limited offline fallbacks.
 

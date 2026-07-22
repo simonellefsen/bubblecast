@@ -11,7 +11,13 @@ import {
   resetLearner,
   saveLearner,
 } from "@/lib/learner-client";
-import { isSupabaseConfigured } from "@/lib/supabase/client";
+import { getSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase/client";
+import {
+  getAuthInfo,
+  sendMagicLink,
+  signOutBubblecast,
+  type AuthInfo,
+} from "@/lib/supabase/auth";
 import { clearAllActiveScenes } from "@/lib/session/client-session";
 import { evaluateAchievements } from "@/lib/achievements";
 import { loadStreak } from "@/lib/streak";
@@ -29,21 +35,36 @@ export default function SettingsPage() {
   const [saved, setSaved] = useState(false);
   const [cloudNote, setCloudNote] = useState<string | null>(null);
   const [backupNote, setBackupNote] = useState<string | null>(null);
+  const [authNote, setAuthNote] = useState<string | null>(null);
+  const [email, setEmail] = useState("");
+  const [authBusy, setAuthBusy] = useState(false);
+  const [authInfo, setAuthInfo] = useState<AuthInfo | null>(null);
   const [streak, setStreak] = useState(0);
   const [aiUsage, setAiUsage] = useState(0);
   const supabaseOn = isSupabaseConfigured();
 
+  async function refreshProfile() {
+    const { learner: hydrated, source, error } = await hydrateLearner();
+    setLearner(hydrated);
+    evaluateAchievements(hydrated);
+    const info = await getAuthInfo();
+    setAuthInfo(info);
+    if (error) setCloudNote(error);
+    else if (source === "supabase") {
+      setCloudNote(
+        info.isAnonymous
+          ? "Cloud profile (anonymous device)"
+          : `Cloud profile · ${info.email ?? "signed in"}`,
+      );
+    } else if (supabaseOn) setCloudNote("Using local cache");
+    else setCloudNote("Supabase env not set — local only");
+  }
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const { learner: hydrated, source, error } = await hydrateLearner();
+      await refreshProfile();
       if (cancelled) return;
-      setLearner(hydrated);
-      evaluateAchievements(hydrated);
-      if (error) setCloudNote(error);
-      else if (source === "supabase") setCloudNote("Cloud profile active");
-      else if (supabaseOn) setCloudNote("Using local cache");
-      else setCloudNote("Supabase env not set — local only");
     })();
     setStreak(loadStreak().count);
     setAiUsage(loadUsage().count);
@@ -53,8 +74,18 @@ export default function SettingsPage() {
       .catch(() =>
         setHealth({ hasXaiKey: false, hasSupabase: false, model: "unknown" }),
       );
+
+    const supabase = getSupabaseBrowserClient();
+    const {
+      data: { subscription },
+    } =
+      supabase?.auth.onAuthStateChange(() => {
+        void refreshProfile();
+      }) ?? { data: { subscription: null } };
+
     return () => {
       cancelled = true;
+      subscription?.unsubscribe();
     };
   }, [supabaseOn]);
 
@@ -108,6 +139,94 @@ export default function SettingsPage() {
             when configured.
           </p>
         </div>
+
+        {supabaseOn ? (
+          <section className="space-y-3 rounded-2xl border bg-white p-4 shadow-sm">
+            <h2 className="font-semibold">Account</h2>
+            <p className="text-sm text-slate-600">
+              Play anonymously by default. Optionally email a magic link so the
+              same cloud profile works on another device. Export a backup first
+              if you already have local XP.
+            </p>
+            <dl className="space-y-1 text-sm">
+              <div className="flex justify-between gap-2">
+                <dt className="text-slate-500">Session</dt>
+                <dd className="text-right text-slate-700">
+                  {authInfo
+                    ? authInfo.isAnonymous
+                      ? "Anonymous device"
+                      : authInfo.email ?? "Signed in"
+                    : "…"}
+                </dd>
+              </div>
+              {authInfo?.userId ? (
+                <div className="flex justify-between gap-2">
+                  <dt className="text-slate-500">User id</dt>
+                  <dd className="font-mono text-[10px] text-slate-400">
+                    {authInfo.userId.slice(0, 8)}…
+                  </dd>
+                </div>
+              ) : null}
+            </dl>
+            {authInfo?.isAnonymous !== false ? (
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <input
+                  type="email"
+                  autoComplete="email"
+                  placeholder="you@example.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="flex-1 rounded-xl border px-3 py-2 text-sm"
+                />
+                <button
+                  type="button"
+                  disabled={authBusy || !email.trim()}
+                  className="rounded-full bg-orange-500 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-600 disabled:opacity-50"
+                  onClick={async () => {
+                    setAuthBusy(true);
+                    setAuthNote(null);
+                    const result = await sendMagicLink(email);
+                    setAuthBusy(false);
+                    setAuthNote(
+                      result.ok
+                        ? "Check your email for the magic link."
+                        : result.error ?? "Could not send link",
+                    );
+                  }}
+                >
+                  {authBusy ? "Sending…" : "Send magic link"}
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                disabled={authBusy}
+                className="rounded-full border px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                onClick={async () => {
+                  setAuthBusy(true);
+                  const result = await signOutBubblecast();
+                  setAuthBusy(false);
+                  if (!result.ok) {
+                    setAuthNote(result.error ?? "Sign out failed");
+                    return;
+                  }
+                  setAuthNote("Signed out. Next visit uses a fresh anonymous session unless you sign in again.");
+                  await refreshProfile();
+                }}
+              >
+                Sign out
+              </button>
+            )}
+            {authNote ? (
+              <p className="text-xs text-slate-500">{authNote}</p>
+            ) : (
+              <p className="text-xs text-slate-400">
+                Supabase → Authentication → enable Email (magic link). Add this
+                site URL to redirect allow-list.
+              </p>
+            )}
+          </section>
+        ) : null}
 
         <section className="rounded-2xl border bg-white p-4 shadow-sm">
           <h2 className="font-semibold">Backend</h2>
