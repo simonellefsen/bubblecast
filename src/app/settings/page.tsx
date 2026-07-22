@@ -8,6 +8,7 @@ import {
   exportProgressBackup,
   hydrateLearner,
   importProgressBackup,
+  loadLearner,
   resetLearner,
   saveLearner,
 } from "@/lib/learner-client";
@@ -20,7 +21,6 @@ import {
   type AuthInfo,
 } from "@/lib/supabase/auth";
 import { pushFullLearnerProgress } from "@/lib/supabase/learner-sync";
-import { loadLearner } from "@/lib/learner-client";
 import { clearAllActiveScenes } from "@/lib/session/client-session";
 import { evaluateAchievements } from "@/lib/achievements";
 import { loadStreak } from "@/lib/streak";
