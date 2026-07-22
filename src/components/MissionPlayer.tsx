@@ -11,12 +11,17 @@ import {
   newlyUnlockedMissions,
 } from "@/content/harborline/world";
 import type {
+  CefrLevel,
   DebriefPacket,
   LearnerProfile,
   MissionTemplate,
   SceneSession,
 } from "@/content/types";
-import { hydrateLearner, saveLearnerAfterDebrief } from "@/lib/learner-client";
+import {
+  hydrateLearner,
+  saveLearner,
+  saveLearnerAfterDebrief,
+} from "@/lib/learner-client";
 import { buildSceneLearnerContext } from "@/lib/learner-context";
 import {
   clearActiveScene,
@@ -24,6 +29,7 @@ import {
   saveActiveScene,
 } from "@/lib/session/client-session";
 import { applyDebriefToLearner } from "@/lib/session/store";
+import { suggestCefrNudge, type CefrNudge } from "@/lib/cefr-nudge";
 import { recordActivity } from "@/lib/streak";
 import { CharacterAvatar } from "./CharacterAvatar";
 import { ComicReader } from "./ComicReader";
@@ -56,6 +62,7 @@ export function MissionPlayer({ missionId }: { missionId: string }) {
   const [loadingStep, setLoadingStep] = useState("Checking traveler profile…");
   const [unlockedNow, setUnlockedNow] = useState<MissionTemplate[]>([]);
   const [streakCount, setStreakCount] = useState(0);
+  const [cefrNudge, setCefrNudge] = useState<CefrNudge | null>(null);
   const scroller = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -325,6 +332,7 @@ export function MissionPlayer({ missionId }: { missionId: string }) {
       );
       const streak = recordActivity();
       setStreakCount(streak.count);
+      setCefrNudge(suggestCefrNudge(learner.cefr, data.debrief));
       const { error: syncError } = await saveLearnerAfterDebrief(
         updated,
         mission.id,
@@ -511,7 +519,7 @@ export function MissionPlayer({ missionId }: { missionId: string }) {
       ) : null}
 
       {phase === "live" && session ? (
-        <div className="grid gap-4 lg:grid-cols-[1fr_240px]">
+        <div className="grid gap-4 pb-28 lg:grid-cols-[1fr_240px] lg:pb-0">
           <div
             className={`overflow-hidden rounded-3xl border border-white/60 bg-gradient-to-b ${location.background} shadow-lg`}
           >
@@ -534,7 +542,7 @@ export function MissionPlayer({ missionId }: { missionId: string }) {
 
             <div
               ref={scroller}
-              className="flex max-h-[420px] flex-col gap-3 overflow-y-auto bg-white/55 p-4 backdrop-blur"
+              className="flex max-h-[50vh] flex-col gap-3 overflow-y-auto bg-white/55 p-4 backdrop-blur sm:max-h-[420px]"
             >
               {session.turns.map((t, i) => {
                 const isLast = i === session.turns.length - 1;
@@ -552,14 +560,14 @@ export function MissionPlayer({ missionId }: { missionId: string }) {
             </div>
 
             {hintText ? (
-              <div className="border-t border-amber-100 bg-amber-50/90 px-4 py-2 text-sm text-amber-900">
+              <div className="border-t border-amber-100 bg-amber-50/90 px-4 py-2 text-sm text-amber-900 lg:static">
                 💡 {hintText}
               </div>
             ) : null}
 
             <form
               onSubmit={sendTurn}
-              className="flex flex-col gap-2 border-t border-white/50 bg-white/80 p-3 sm:flex-row"
+              className="fixed inset-x-0 bottom-0 z-30 flex flex-col gap-2 border-t border-orange-100 bg-white/95 p-3 shadow-[0_-8px_30px_rgba(15,23,42,0.08)] backdrop-blur sm:flex-row lg:static lg:border-white/50 lg:bg-white/80 lg:shadow-none"
             >
               <input
                 ref={inputRef}
@@ -628,12 +636,28 @@ export function MissionPlayer({ missionId }: { missionId: string }) {
         </div>
       ) : null}
 
-      {phase === "debrief" && debrief ? (
+      {phase === "debrief" && debrief && learner ? (
         <DebriefView
           debrief={debrief}
           missionTitle={mission.title}
           unlocked={unlockedNow}
           streakCount={streakCount}
+          cefrNudge={cefrNudge}
+          currentCefr={learner.cefr}
+          onApplyCefr={(level) => {
+            const next = {
+              ...learner,
+              cefr: level,
+              updatedAt: new Date().toISOString(),
+            };
+            setLearner(next);
+            saveLearner(next);
+            setCefrNudge({
+              suggested: level,
+              direction: "stay",
+              reason: `CEFR set to ${level}.`,
+            });
+          }}
         />
       ) : null}
     </div>
@@ -665,11 +689,17 @@ function DebriefView({
   missionTitle,
   unlocked,
   streakCount,
+  cefrNudge,
+  currentCefr,
+  onApplyCefr,
 }: {
   debrief: DebriefPacket;
   missionTitle: string;
   unlocked: MissionTemplate[];
   streakCount: number;
+  cefrNudge: CefrNudge | null;
+  currentCefr: CefrLevel;
+  onApplyCefr: (level: CefrLevel) => void;
 }) {
   const tone =
     debrief.outcome === "success"
@@ -695,6 +725,23 @@ function DebriefView({
           </p>
         ) : null}
       </div>
+
+      {cefrNudge && cefrNudge.direction !== "stay" ? (
+        <div className="rounded-2xl border border-violet-200 bg-violet-50 p-4 text-sm text-violet-950">
+          <p className="font-semibold">Level tip (optional)</p>
+          <p className="mt-1 text-violet-900/90">{cefrNudge.reason}</p>
+          <button
+            type="button"
+            className="mt-3 rounded-full bg-violet-600 px-4 py-2 text-xs font-semibold text-white hover:bg-violet-700"
+            onClick={() => onApplyCefr(cefrNudge.suggested)}
+          >
+            Switch to {cefrNudge.suggested}
+          </button>
+          <span className="ml-2 text-xs text-violet-700">
+            Current: {currentCefr}
+          </span>
+        </div>
+      ) : null}
 
       {unlocked.length > 0 ? (
         <div className="rounded-2xl border border-sky-200 bg-sky-50 p-4 shadow-sm">

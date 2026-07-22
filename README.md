@@ -32,6 +32,9 @@ Default pair: **English → Spanish**, CEFR A1–B1.
 - **Night ferry** endgame mission; daily activity streak on the map  
 - **Onboarding tip** for first-time travelers; Settings export/import JSON backup  
 - **Error boundary** + auto-focus reply input after streaming turns  
+- **Up next** recommendation; optional CEFR nudge after debrief  
+- **Sticky mobile reply bar**; Settings can clear stuck scene cache  
+
 
 
 

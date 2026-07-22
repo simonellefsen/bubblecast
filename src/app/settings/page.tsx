@@ -11,6 +11,7 @@ import {
   saveLearner,
 } from "@/lib/learner-client";
 import { isSupabaseConfigured } from "@/lib/supabase/client";
+import { clearAllActiveScenes } from "@/lib/session/client-session";
 import { loadStreak } from "@/lib/streak";
 
 const levels: CefrLevel[] = ["A1", "A2", "B1", "B2"];
@@ -214,6 +215,28 @@ export default function SettingsPage() {
           {backupNote ? (
             <p className="text-xs text-slate-500">{backupNote}</p>
           ) : null}
+        </section>
+
+        <section className="space-y-3 rounded-2xl border bg-white p-4 shadow-sm">
+          <h2 className="font-semibold">Scene cache</h2>
+          <p className="text-sm text-slate-600">
+            Clear stuck in-progress missions saved in this browser tab
+            (sessionStorage). Does not reset XP or journal.
+          </p>
+          <button
+            type="button"
+            className="rounded-full border px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            onClick={() => {
+              const n = clearAllActiveScenes();
+              setBackupNote(
+                n === 0
+                  ? "No active scenes to clear"
+                  : `Cleared ${n} saved scene${n === 1 ? "" : "s"}`,
+              );
+            }}
+          >
+            Clear active scenes
+          </button>
         </section>
 
         <section className="rounded-2xl border bg-white p-4 shadow-sm">

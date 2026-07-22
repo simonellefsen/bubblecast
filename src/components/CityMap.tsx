@@ -10,6 +10,7 @@ import type { LearnerProfile } from "@/content/types";
 import { loadStreak } from "@/lib/streak";
 import { ActiveMissionBanner } from "./ActiveMissionBanner";
 import { OnboardingCard } from "./OnboardingCard";
+import { UpNextCard } from "./UpNextCard";
 
 export function CityMap({ learner }: { learner: LearnerProfile }) {
   const completed = learner.completedMissionIds;
@@ -44,6 +45,8 @@ export function CityMap({ learner }: { learner: LearnerProfile }) {
       <ActiveMissionBanner />
 
       <OnboardingCard show={completed.length === 0} />
+
+      {completed.length > 0 ? <UpNextCard learner={learner} /> : null}
 
       <div className="relative min-h-[360px] overflow-hidden rounded-3xl border border-sky-100 bg-gradient-to-br from-sky-100 via-amber-50 to-emerald-50 shadow-inner">
         <div className="pointer-events-none absolute inset-0 opacity-40 [background-image:radial-gradient(#94a3b8_1px,transparent_1px)] [background-size:18px_18px]" />

@@ -70,6 +70,25 @@ export function clearActiveScene(missionId: string) {
   }
 }
 
+export function clearAllActiveScenes(): number {
+  if (typeof window === "undefined") return 0;
+  let n = 0;
+  try {
+    const keys: string[] = [];
+    for (let i = 0; i < sessionStorage.length; i++) {
+      const k = sessionStorage.key(i);
+      if (k?.startsWith(PREFIX)) keys.push(k);
+    }
+    for (const k of keys) {
+      sessionStorage.removeItem(k);
+      n += 1;
+    }
+  } catch {
+    return n;
+  }
+  return n;
+}
+
 /** Scan sessionStorage for any resumable Bubblecast scenes. */
 export function listActiveScenes(): StoredMissionState[] {
   if (typeof window === "undefined") return [];

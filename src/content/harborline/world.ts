@@ -468,6 +468,17 @@ export function newlyUnlockedMissions(
   });
 }
 
+/** First unlocked mission not yet completed (story order). */
+export function recommendNextMission(completedMissionIds: string[]) {
+  return (
+    harborline.missions.find(
+      (m) =>
+        isMissionUnlocked(m.id, completedMissionIds) &&
+        !completedMissionIds.includes(m.id),
+    ) ?? null
+  );
+}
+
 export function getLocation(locationId: string) {
   const location = harborline.locations.find((l) => l.id === locationId);
   if (!location) throw new Error(`Unknown location: ${locationId}`);
