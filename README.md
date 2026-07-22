@@ -42,6 +42,9 @@ Default pair: **English → Spanish**, CEFR A1–B1.
 - **Health API** reports XAI + Supabase env presence  
 - **SRS-lite**: vocab `nextReviewAt` (1/3/7 days by grade); due-first practice  
 - **Open Graph** metadata for link previews  
+- **Due-vocab banner** on the map; comic focus/grid + keyboard flip  
+- **Security headers** (frame deny, nosniff, HSTS, permissions-policy)  
+
 
 
 

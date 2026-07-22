@@ -9,6 +9,7 @@ import {
 import type { LearnerProfile } from "@/content/types";
 import { loadStreak } from "@/lib/streak";
 import { ActiveMissionBanner } from "./ActiveMissionBanner";
+import { DueVocabBanner } from "./DueVocabBanner";
 import { OnboardingCard } from "./OnboardingCard";
 import { UpNextCard } from "./UpNextCard";
 
@@ -45,6 +46,8 @@ export function CityMap({ learner }: { learner: LearnerProfile }) {
       <ActiveMissionBanner />
 
       <OnboardingCard show={completed.length === 0} />
+
+      <DueVocabBanner learner={learner} />
 
       {completed.length > 0 ? <UpNextCard learner={learner} /> : null}
 

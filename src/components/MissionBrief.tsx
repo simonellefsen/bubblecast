@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import type { Character, LearnerProfile, Location, MissionTemplate } from "@/content/types";
+import { DAILY_AI_SOFT_CAP, loadUsage } from "@/lib/usage";
 import { CharacterAvatar } from "./CharacterAvatar";
 
 export function MissionBrief({
@@ -27,6 +29,12 @@ export function MissionBrief({
   locked?: boolean;
   lockHint?: string;
 }) {
+  const [aiUsed, setAiUsed] = useState(0);
+  useEffect(() => {
+    setAiUsed(loadUsage().count);
+  }, []);
+  const remaining = Math.max(0, DAILY_AI_SOFT_CAP - aiUsed);
+
   return (
     <div className="mx-auto max-w-2xl space-y-5">
       <div>
@@ -136,6 +144,8 @@ export function MissionBrief({
 
       <p className="text-xs text-slate-400">
         Playing as {learner.displayName} · CEFR {learner.cefr} · {learner.xp} XP
+        {" · "}
+        AI budget ~{remaining}/{DAILY_AI_SOFT_CAP} left today
       </p>
     </div>
   );
