@@ -14,6 +14,7 @@ import type {
   Emotion,
   LearnerProfile,
   SceneBeat,
+  SceneLearnerContext,
   SceneSession,
   SceneTurn,
 } from "@/content/types";
@@ -121,7 +122,10 @@ function assertActiveSession(session: SceneSession) {
   }
 }
 
-export async function generateComic(missionId: string): Promise<ComicScript> {
+export async function generateComic(
+  missionId: string,
+  learnerContext?: SceneLearnerContext,
+): Promise<ComicScript> {
   const mission = getMission(missionId);
   const cast = getCharacters(mission.castIds);
   const { signal, clear } = timeoutSignal();
@@ -130,7 +134,7 @@ export async function generateComic(missionId: string): Promise<ComicScript> {
       model: getModel(),
       schema: comicScriptSchema,
       system: comicSystemPrompt(),
-      prompt: comicUserPrompt(mission, cast),
+      prompt: comicUserPrompt(mission, cast, learnerContext),
       abortSignal: signal,
     });
     return {
@@ -156,6 +160,7 @@ export async function generateComic(missionId: string): Promise<ComicScript> {
 async function planScene(
   missionId: string,
   learner: Pick<LearnerProfile, "cefr" | "displayName">,
+  learnerContext?: SceneLearnerContext,
 ): Promise<ScenePlan> {
   const mission = getMission(missionId);
   const location = getLocation(mission.locationId);
@@ -167,7 +172,7 @@ async function planScene(
       model: getModel(),
       schema: scenePlanSchema,
       system: directorSystemPrompt(),
-      prompt: directorUserPrompt(mission, location, cast, learner),
+      prompt: directorUserPrompt(mission, location, cast, learner, learnerContext),
       abortSignal: signal,
     });
     return {
@@ -192,15 +197,17 @@ export async function startScene(opts: {
   missionId: string;
   learner: Pick<LearnerProfile, "cefr" | "displayName">;
   includeComic?: boolean;
+  learnerContext?: SceneLearnerContext;
 }): Promise<SceneSession> {
   const mission = getMission(opts.missionId);
   const wantComic = opts.includeComic !== false;
+  const learnerContext = opts.learnerContext;
 
   // Parallel director + comic — biggest start latency win
   const [plan, comic] = await Promise.all([
-    planScene(opts.missionId, opts.learner),
+    planScene(opts.missionId, opts.learner, learnerContext),
     wantComic
-      ? generateComic(opts.missionId)
+      ? generateComic(opts.missionId, learnerContext)
       : Promise.resolve(undefined as ComicScript | undefined),
   ]);
 
@@ -235,6 +242,7 @@ export async function startScene(opts: {
     turnCount: 0,
     maxTurns,
     comic,
+    learnerContext,
     createdAt: now,
     updatedAt: now,
   };

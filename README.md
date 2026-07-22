@@ -24,6 +24,8 @@ Default pair: **English → Spanish**, CEFR A1–B1.
 - **Cost / latency guards**: parallel mission start, AI timeouts, turn budget, session size limits  
 - **Journal practice**: flip cards, mark new/fuzzy/known (syncs to Supabase)  
 - **Hub continuity**: resume in-progress missions from the map; cloud debrief history  
+- **Mission brief**: review goals/cast/phrases before AI spend; cast uses bond + focus vocab  
+
 
 
 

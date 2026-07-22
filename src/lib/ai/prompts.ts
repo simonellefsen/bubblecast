@@ -3,6 +3,7 @@ import type {
   LearnerProfile,
   Location,
   MissionTemplate,
+  SceneLearnerContext,
   SceneSession,
 } from "@/content/types";
 import { harborline } from "@/content/harborline/world";
@@ -18,6 +19,23 @@ Rules:
 - Never dump long grammar lectures mid-scene.
 `.trim();
 
+function formatLearnerContext(ctx?: SceneLearnerContext) {
+  if (!ctx) return null;
+  return {
+    displayName: ctx.displayName,
+    relationships: ctx.relationships.map((r) => ({
+      characterId: r.characterId,
+      score: r.score,
+      warmth:
+        r.score >= 70 ? "warm friend" : r.score >= 40 ? "familiar" : "new acquaintance",
+      notes: r.notes || undefined,
+    })),
+    focusVocab: ctx.focusVocab,
+    instruction:
+      "If relationship score is high, be warmer/more informal. If low, more polite distance. Gently reuse 1 focusVocab item when natural — do not force a vocab quiz.",
+  };
+}
+
 export function comicSystemPrompt() {
   return `${GLOBAL_RAILS}
 
@@ -26,7 +44,11 @@ Each panel teaches one useful phrase in context. Characters stay in personality.
 Return only structured data matching the schema.`;
 }
 
-export function comicUserPrompt(mission: MissionTemplate, cast: Character[]) {
+export function comicUserPrompt(
+  mission: MissionTemplate,
+  cast: Character[],
+  learnerContext?: SceneLearnerContext,
+) {
   return JSON.stringify(
     {
       mission,
@@ -39,6 +61,7 @@ export function comicUserPrompt(mission: MissionTemplate, cast: Character[]) {
       })),
       targetPhrases: mission.targetPhrases,
       difficulty: mission.difficulty,
+      learner: formatLearnerContext(learnerContext),
       instruction:
         "Write comic panels. speakerId must be character ids or 'narrator'. text in Spanish, gloss in English for learner lines and key NPC lines.",
     },
@@ -52,7 +75,8 @@ export function directorSystemPrompt() {
 
 You are the Director. Plan scene beats and opening NPC lines for a live speech-bubble scene.
 Beats should be achievable in a short dialogue. Hints escalate: soft idea → useful phrase → full model line.
-Opening NPC turns should invite the learner to speak in Spanish.`;
+Opening NPC turns should invite the learner to speak in Spanish.
+Use learner relationship warmth and focus vocabulary when it fits.`;
 }
 
 export function directorUserPrompt(
@@ -60,6 +84,7 @@ export function directorUserPrompt(
   location: Location,
   cast: Character[],
   learner: Pick<LearnerProfile, "cefr" | "displayName">,
+  learnerContext?: SceneLearnerContext,
 ) {
   return JSON.stringify(
     {
@@ -73,7 +98,11 @@ export function directorUserPrompt(
         speechRegister: c.speechRegister,
         slangDensity: c.slangDensity,
       })),
-      learner,
+      learner: {
+        cefr: learner.cefr,
+        displayName: learner.displayName,
+        ...formatLearnerContext(learnerContext),
+      },
     },
     null,
     2,
@@ -82,6 +111,18 @@ export function directorUserPrompt(
 
 export function actorSystemPrompt(session: SceneSession, cast: Character[]) {
   const mission = harborline.missions.find((m) => m.id === session.missionId)!;
+  const ctx = session.learnerContext;
+  const relLine = ctx?.relationships
+    ?.map((r) => {
+      const name = cast.find((c) => c.id === r.characterId)?.name ?? r.characterId;
+      return `${name}:${r.score}`;
+    })
+    .join(", ");
+  const vocabLine = ctx?.focusVocab
+    ?.slice(0, 5)
+    .map((v) => v.word)
+    .join(", ");
+
   return `${GLOBAL_RAILS}
 
 You are the Cast Actors + live Director for a speech-bubble improv scene.
@@ -89,8 +130,10 @@ Stay in character. 1–3 short NPC turns max per learner message.
 Mark beats completed when the learner roughly achieves them (accept imperfect Spanish).
 If the learner writes English, respond in simple Spanish and gently model the Spanish form; do not shame them.
 Set sceneShouldEnd=true when mission goals are mostly met or turn budget is nearly exhausted and a natural close exists.
-CEFR: ${session.cefr}. Mission: ${mission.title}. Goal: ${mission.learnerGoal}.
+CEFR: ${session.cefr}. Learner: ${ctx?.displayName ?? "Traveler"}. Mission: ${mission.title}. Goal: ${mission.learnerGoal}.
 Cast: ${cast.map((c) => `${c.name} (${c.id}): ${c.traits.join(", ")}`).join("; ")}.
+Relationships (0-100): ${relLine || "default"}.
+Focus vocab to reuse gently: ${vocabLine || "none"}.
 Open beats: ${session.beats.map((b) => `${b.id}:${b.goal}${b.completed ? " [done]" : ""}`).join(" | ")}.`;
 }
 
@@ -136,6 +179,12 @@ export function debriefUserPrompt(
       turns: session.turns,
       beats: session.beats,
       cefr: session.cefr,
+      learner: session.learnerContext
+        ? {
+            displayName: session.learnerContext.displayName,
+            relationships: session.learnerContext.relationships,
+          }
+        : undefined,
     },
     null,
     2,

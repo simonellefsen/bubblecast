@@ -159,6 +159,14 @@ export interface SceneTurn {
   at: string;
 }
 
+/** Compact learner snapshot carried with the scene (serverless-safe). */
+export interface SceneLearnerContext {
+  displayName: string;
+  relationships: { characterId: CharacterId; score: number; notes: string }[];
+  /** Words to weave/reuse gently (new + fuzzy first). */
+  focusVocab: { word: string; gloss: string; status: VocabEntry["status"] }[];
+}
+
 export interface SceneSession {
   id: string;
   missionId: string;
@@ -171,6 +179,7 @@ export interface SceneSession {
   turnCount: number;
   maxTurns: number;
   comic?: ComicScript;
+  learnerContext?: SceneLearnerContext;
   createdAt: string;
   updatedAt: string;
 }

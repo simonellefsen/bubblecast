@@ -14,6 +14,7 @@ import type {
   SceneSession,
 } from "@/content/types";
 import { hydrateLearner, saveLearnerAfterDebrief } from "@/lib/learner-client";
+import { buildSceneLearnerContext } from "@/lib/learner-context";
 import {
   clearActiveScene,
   loadActiveScene,
@@ -22,9 +23,10 @@ import {
 import { applyDebriefToLearner } from "@/lib/session/store";
 import { CharacterAvatar } from "./CharacterAvatar";
 import { ComicReader } from "./ComicReader";
+import { MissionBrief } from "./MissionBrief";
 import { SpeechBubble } from "./SpeechBubble";
 
-type Phase = "loading" | "comic" | "live" | "debrief" | "error";
+type Phase = "brief" | "loading" | "comic" | "live" | "debrief" | "error";
 
 export function MissionPlayer({ missionId }: { missionId: string }) {
   const mission = useMemo(() => getMission(missionId), [missionId]);
@@ -46,6 +48,7 @@ export function MissionPlayer({ missionId }: { missionId: string }) {
   const [hintText, setHintText] = useState<string | null>(null);
   const [resumed, setResumed] = useState(false);
   const [streaming, setStreaming] = useState(false);
+  const [includeComic, setIncludeComic] = useState(true);
   const [loadingStep, setLoadingStep] = useState("Checking traveler profile…");
   const scroller = useRef<HTMLDivElement>(null);
 
@@ -84,36 +87,52 @@ export function MissionPlayer({ missionId }: { missionId: string }) {
           return;
         }
 
-        setLoadingStep("Director planning beats + comic (in parallel)…");
-        const res = await fetch("/api/scene/start", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            missionId,
-            learner: {
-              cefr: hydrated.cefr,
-              displayName: hydrated.displayName,
-            },
-            includeComic: true,
-          }),
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || "Failed to start");
-        if (cancelled) return;
-        setLoadingStep("Setting the stage…");
-        const nextPhase = data.session.comic ? "comic" : "live";
-        commitSession(data.session, nextPhase);
+        // Wait for user confirmation (mission brief) before AI spend
+        setPhase("brief");
       } catch (e) {
         if (cancelled) return;
-        setError(e instanceof Error ? e.message : "Failed to start mission");
+        setError(e instanceof Error ? e.message : "Failed to load mission");
         setPhase("error");
       }
     })();
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- start once per mission
   }, [missionId]);
+
+  async function startFromBrief() {
+    if (!learner || busy) return;
+    setBusy(true);
+    setPhase("loading");
+    setError(null);
+    try {
+      setLoadingStep("Director planning beats + comic (in parallel)…");
+      const learnerContext = buildSceneLearnerContext(learner, mission.castIds);
+      const res = await fetch("/api/scene/start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          missionId,
+          learner: {
+            cefr: learner.cefr,
+            displayName: learner.displayName,
+          },
+          includeComic,
+          learnerContext,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to start");
+      setLoadingStep("Setting the stage…");
+      const nextPhase = data.session.comic ? "comic" : "live";
+      commitSession(data.session, nextPhase);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to start mission");
+      setPhase("error");
+    } finally {
+      setBusy(false);
+    }
+  }
 
   useEffect(() => {
     scroller.current?.scrollTo({
@@ -308,39 +327,43 @@ export function MissionPlayer({ missionId }: { missionId: string }) {
     clearActiveScene(missionId);
     setSession(null);
     setDebrief(null);
-    setPhase("loading");
     setError(null);
     setResumed(false);
     setHintLevel(0);
     setHintText(null);
     if (!learner) return;
-    setBusy(true);
-    try {
-      const res = await fetch("/api/scene/start", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          missionId,
-          learner: {
-            cefr: learner.cefr,
-            displayName: learner.displayName,
-          },
-          includeComic: true,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to start");
-      const nextPhase = data.session.comic ? "comic" : "live";
-      commitSession(data.session, nextPhase);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to restart");
-      setPhase("error");
-    } finally {
-      setBusy(false);
-    }
+    setPhase("brief");
   }
 
-  if (phase === "loading" || !learner) {
+  if (phase === "loading" && !learner) {
+    return (
+      <div className="flex min-h-[40vh] flex-col items-center justify-center gap-3 text-slate-600">
+        <div className="h-10 w-10 animate-spin rounded-full border-4 border-orange-200 border-t-orange-500" />
+        <p className="text-sm">{loadingStep}</p>
+      </div>
+    );
+  }
+
+  if (!learner) {
+    return <p className="text-slate-500">Loading profile…</p>;
+  }
+
+  if (phase === "brief") {
+    return (
+      <MissionBrief
+        mission={mission}
+        location={location}
+        cast={cast}
+        learner={learner}
+        busy={busy}
+        onStart={() => void startFromBrief()}
+        includeComic={includeComic}
+        onIncludeComicChange={setIncludeComic}
+      />
+    );
+  }
+
+  if (phase === "loading") {
     return (
       <div className="flex min-h-[40vh] flex-col items-center justify-center gap-4 text-slate-600">
         <div className="h-10 w-10 animate-spin rounded-full border-4 border-orange-200 border-t-orange-500" />
