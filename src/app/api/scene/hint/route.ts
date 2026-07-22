@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import type { SceneSession } from "@/content/types";
 import { getHint } from "@/lib/ai/scene-service";
+import { assertSessionPayload } from "@/lib/session/validate";
 
 export async function POST(req: Request) {
   try {
@@ -8,13 +9,11 @@ export async function POST(req: Request) {
       session?: SceneSession;
       level?: "soft" | "phrase" | "full";
     };
-    if (!body.session?.id) {
-      return NextResponse.json(
-        { error: "session required (serverless-safe scene state)" },
-        { status: 400 },
-      );
+    const checked = assertSessionPayload(body.session);
+    if (!checked.ok) {
+      return NextResponse.json({ error: checked.error }, { status: 400 });
     }
-    const hint = getHint(body.session, body.level ?? "soft");
+    const hint = getHint(checked.session, body.level ?? "soft");
     return NextResponse.json({ hint });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Hint failed";

@@ -173,6 +173,31 @@ export async function fetchLearnerFromSupabase(): Promise<LearnerProfile | null>
   };
 }
 
+export async function persistVocabEntry(
+  entry: VocabEntry,
+): Promise<{ ok: boolean; error?: string }> {
+  const ensured = await ensureBubblecastUser();
+  if (!ensured?.userId) {
+    return { ok: false, error: ensured?.error ?? "Not signed in" };
+  }
+  const supabase = getSupabaseBrowserClient();
+  if (!supabase) return { ok: false, error: "Supabase not configured" };
+
+  const { error } = await supabase.from("bubblecast_vocab").upsert(
+    {
+      user_id: ensured.userId,
+      word: entry.word,
+      gloss: entry.gloss,
+      status: entry.status,
+      times_seen: entry.timesSeen,
+      last_seen_at: entry.lastSeenAt,
+    },
+    { onConflict: "user_id,word" },
+  );
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
 export async function persistLearnerProfile(
   learner: LearnerProfile,
 ): Promise<{ ok: boolean; error?: string }> {

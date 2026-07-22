@@ -5,6 +5,7 @@ import {
   learnerTurn,
   streamLearnerTurn,
 } from "@/lib/ai/scene-service";
+import { assertSessionPayload } from "@/lib/session/validate";
 
 export async function POST(req: Request) {
   try {
@@ -15,15 +16,13 @@ export async function POST(req: Request) {
       stream?: boolean;
     };
 
-    if (!body.session?.id) {
-      return NextResponse.json(
-        { error: "session required (serverless-safe scene state)" },
-        { status: 400 },
-      );
+    const checked = assertSessionPayload(body.session);
+    if (!checked.ok) {
+      return NextResponse.json({ error: checked.error }, { status: 400 });
     }
 
     if (body.action === "begin_live") {
-      const session = beginLive(body.session);
+      const session = beginLive(checked.session);
       return NextResponse.json({ session });
     }
 
@@ -31,8 +30,15 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "text required" }, { status: 400 });
     }
 
+    if (body.text.length > 800) {
+      return NextResponse.json(
+        { error: "Reply is too long — keep it under a few sentences." },
+        { status: 400 },
+      );
+    }
+
     if (body.stream) {
-      const stream = streamLearnerTurn(body.session, body.text.trim());
+      const stream = streamLearnerTurn(checked.session, body.text.trim());
       return new Response(stream, {
         headers: {
           "Content-Type": "application/x-ndjson; charset=utf-8",
@@ -42,7 +48,7 @@ export async function POST(req: Request) {
       });
     }
 
-    const session = await learnerTurn(body.session, body.text.trim());
+    const session = await learnerTurn(checked.session, body.text.trim());
     return NextResponse.json({ session });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Turn failed";

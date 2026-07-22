@@ -1,17 +1,16 @@
 import { NextResponse } from "next/server";
 import type { SceneSession } from "@/content/types";
 import { endScene } from "@/lib/ai/scene-service";
+import { assertSessionPayload } from "@/lib/session/validate";
 
 export async function POST(req: Request) {
   try {
     const body = (await req.json()) as { session?: SceneSession };
-    if (!body.session?.id) {
-      return NextResponse.json(
-        { error: "session required (serverless-safe scene state)" },
-        { status: 400 },
-      );
+    const checked = assertSessionPayload(body.session);
+    if (!checked.ok) {
+      return NextResponse.json({ error: checked.error }, { status: 400 });
     }
-    const result = await endScene(body.session);
+    const result = await endScene(checked.session);
     return NextResponse.json(result);
   } catch (err) {
     const message = err instanceof Error ? err.message : "End scene failed";

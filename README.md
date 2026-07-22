@@ -21,6 +21,9 @@ Default pair: **English → Spanish**, CEFR A1–B1.
 - Local cache in `localStorage` + anonymous auth cloud sync  
 - **Serverless-safe scenes**: full session state is sent with each turn (works on Vercel); mid-mission refresh recovers from `sessionStorage`  
 - **Streaming NPC bubbles**: live turns stream via NDJSON so dialogue appears progressively  
+- **Cost / latency guards**: parallel mission start, AI timeouts, turn budget, session size limits  
+- **Journal practice**: flip cards, mark new/fuzzy/known (syncs to Supabase)  
+
 
 
 

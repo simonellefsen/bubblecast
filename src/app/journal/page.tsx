@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { AppShell } from "@/components/AppShell";
+import { VocabPractice } from "@/components/VocabPractice";
 import type { LearnerProfile } from "@/content/types";
 import { hydrateLearner } from "@/lib/learner-client";
 import { harborline } from "@/content/harborline/world";
@@ -29,8 +30,8 @@ export default function JournalPage() {
           <div>
             <h1 className="text-3xl font-semibold tracking-tight">Vocab journal</h1>
             <p className="mt-1 text-slate-600">
-              Words and phrases from your Harborline scenes. Synced when Supabase is
-              configured.
+              Words from Harborline scenes — practice them, then jump back into
+              missions.
             </p>
           </div>
 
@@ -42,6 +43,8 @@ export default function JournalPage() {
             />
             <Stat label="Words" value={String(learner.vocab.length)} />
           </div>
+
+          <VocabPractice learner={learner} onUpdate={setLearner} />
 
           <section className="rounded-2xl border bg-white p-4 shadow-sm">
             <h2 className="font-semibold">Completed missions</h2>
@@ -66,7 +69,7 @@ export default function JournalPage() {
           </section>
 
           <section className="rounded-2xl border bg-white p-4 shadow-sm">
-            <h2 className="font-semibold">Vocabulary</h2>
+            <h2 className="font-semibold">All vocabulary</h2>
             <ul className="mt-3 divide-y">
               {learner.vocab.length === 0 ? (
                 <li className="py-2 text-sm text-slate-500">
@@ -82,7 +85,15 @@ export default function JournalPage() {
                       <div className="font-medium">{v.word}</div>
                       <div className="text-slate-500">{v.gloss}</div>
                     </div>
-                    <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs capitalize text-slate-600">
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-xs capitalize ${
+                        v.status === "known"
+                          ? "bg-emerald-50 text-emerald-800"
+                          : v.status === "fuzzy"
+                            ? "bg-amber-50 text-amber-800"
+                            : "bg-slate-100 text-slate-600"
+                      }`}
+                    >
                       {v.status}
                     </span>
                   </li>

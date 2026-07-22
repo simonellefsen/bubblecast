@@ -17,7 +17,12 @@ import type {
   SceneSession,
   SceneTurn,
 } from "@/content/types";
-import { getModel } from "./client";
+import {
+  AI_TIMEOUT_MS,
+  MAX_MISSION_TURNS,
+  getModel,
+  timeoutSignal,
+} from "./client";
 import {
   comicScriptSchema,
   debriefSchema,
@@ -119,12 +124,14 @@ function assertActiveSession(session: SceneSession) {
 export async function generateComic(missionId: string): Promise<ComicScript> {
   const mission = getMission(missionId);
   const cast = getCharacters(mission.castIds);
+  const { signal, clear } = timeoutSignal();
   try {
     const { object } = await generateObject({
       model: getModel(),
       schema: comicScriptSchema,
       system: comicSystemPrompt(),
       prompt: comicUserPrompt(mission, cast),
+      abortSignal: signal,
     });
     return {
       ...object,
@@ -141,27 +148,29 @@ export async function generateComic(missionId: string): Promise<ComicScript> {
     };
   } catch {
     return fallbackComic(missionId);
+  } finally {
+    clear();
   }
 }
 
-export async function startScene(opts: {
-  missionId: string;
-  learner: Pick<LearnerProfile, "cefr" | "displayName">;
-  includeComic?: boolean;
-}): Promise<SceneSession> {
-  const mission = getMission(opts.missionId);
+async function planScene(
+  missionId: string,
+  learner: Pick<LearnerProfile, "cefr" | "displayName">,
+): Promise<ScenePlan> {
+  const mission = getMission(missionId);
   const location = getLocation(mission.locationId);
   const cast = getCharacters(mission.castIds);
-
-  let plan: ScenePlan = fallbackPlan(opts.missionId, opts.learner.cefr);
+  const fallback = fallbackPlan(missionId, learner.cefr);
+  const { signal, clear } = timeoutSignal();
   try {
     const { object } = await generateObject({
       model: getModel(),
       schema: scenePlanSchema,
       system: directorSystemPrompt(),
-      prompt: directorUserPrompt(mission, location, cast, opts.learner),
+      prompt: directorUserPrompt(mission, location, cast, learner),
+      abortSignal: signal,
     });
-    plan = {
+    return {
       openingNarration: object.openingNarration,
       beats: object.beats.map((b) => ({ ...b, completed: false })),
       openingNpcTurns: object.openingNpcTurns.map((t) => ({
@@ -173,13 +182,27 @@ export async function startScene(opts: {
       })),
     };
   } catch {
-    // use fallback
+    return fallback;
+  } finally {
+    clear();
   }
+}
 
-  let comic: ComicScript | undefined;
-  if (opts.includeComic !== false) {
-    comic = await generateComic(opts.missionId);
-  }
+export async function startScene(opts: {
+  missionId: string;
+  learner: Pick<LearnerProfile, "cefr" | "displayName">;
+  includeComic?: boolean;
+}): Promise<SceneSession> {
+  const mission = getMission(opts.missionId);
+  const wantComic = opts.includeComic !== false;
+
+  // Parallel director + comic — biggest start latency win
+  const [plan, comic] = await Promise.all([
+    planScene(opts.missionId, opts.learner),
+    wantComic
+      ? generateComic(opts.missionId)
+      : Promise.resolve(undefined as ComicScript | undefined),
+  ]);
 
   const now = new Date().toISOString();
   const turns: SceneTurn[] = [
@@ -198,17 +221,19 @@ export async function startScene(opts: {
     })),
   ];
 
+  const maxTurns = Math.min(mission.maxTurns, MAX_MISSION_TURNS);
+
   return {
     id: randomUUID(),
     missionId: mission.id,
     locationId: mission.locationId,
     castIds: mission.castIds,
     cefr: opts.learner.cefr,
-    status: "comic",
+    status: wantComic && comic ? "comic" : "live",
     beats: plan.beats,
     turns,
     turnCount: 0,
-    maxTurns: mission.maxTurns,
+    maxTurns,
     comic,
     createdAt: now,
     updatedAt: now,
@@ -344,16 +369,35 @@ export async function learnerTurn(
 ): Promise<SceneSession> {
   const base = withLearnerMessage(session, text);
   const cast = getCharacters(base.castIds);
+  if (base.turnCount > base.maxTurns) {
+    return {
+      ...base,
+      turns: [
+        ...base.turns,
+        {
+          role: "system" as const,
+          text: "Turn budget reached — end the mission for your debrief.",
+          at: new Date().toISOString(),
+        },
+      ],
+      updatedAt: new Date().toISOString(),
+    };
+  }
+
+  const { signal, clear } = timeoutSignal(AI_TIMEOUT_MS);
   try {
     const { object } = await generateObject({
       model: getModel(),
       schema: npcResponseSchema,
       system: actorSystemPrompt(base, cast),
       prompt: actorUserPrompt(base, text),
+      abortSignal: signal,
     });
     return applyNpcResponse(base, object);
   } catch {
     return fallbackNpcReply(base);
+  } finally {
+    clear();
   }
 }
 
@@ -377,12 +421,34 @@ export function streamLearnerTurn(
 
       send({ type: "ack", session: base });
 
+      if (base.turnCount > base.maxTurns) {
+        send({
+          type: "done",
+          session: {
+            ...base,
+            turns: [
+              ...base.turns,
+              {
+                role: "system" as const,
+                text: "Turn budget reached — end the mission for your debrief.",
+                at: new Date().toISOString(),
+              },
+            ],
+            updatedAt: new Date().toISOString(),
+          },
+        });
+        controller.close();
+        return;
+      }
+
+      const { signal, clear } = timeoutSignal(AI_TIMEOUT_MS);
       try {
         const result = streamObject({
           model: getModel(),
           schema: npcResponseSchema,
           system: actorSystemPrompt(base, cast),
           prompt: actorUserPrompt(base, text),
+          abortSignal: signal,
         });
 
         for await (const partial of result.partialObjectStream) {
@@ -397,6 +463,7 @@ export function streamLearnerTurn(
       } catch {
         send({ type: "done", session: fallbackNpcReply(base) });
       } finally {
+        clear();
         controller.close();
       }
     },
@@ -432,12 +499,14 @@ export async function endScene(session: SceneSession): Promise<{
   const cast = getCharacters(next.castIds);
 
   let debrief: DebriefPacket;
+  const { signal, clear } = timeoutSignal(AI_TIMEOUT_MS);
   try {
     const { object } = await generateObject({
       model: getModel(),
       schema: debriefSchema,
       system: debriefSystemPrompt(),
       prompt: debriefUserPrompt(next, mission, cast),
+      abortSignal: signal,
     });
     debrief = {
       ...object,
@@ -480,6 +549,8 @@ export async function endScene(session: SceneSession): Promise<{
         delta: outcome === "fail" ? 1 : 3,
       })),
     };
+  } finally {
+    clear();
   }
 
   next.status = "ended";

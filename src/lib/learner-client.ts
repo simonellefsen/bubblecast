@@ -3,10 +3,12 @@
 import type { DebriefPacket, LearnerProfile } from "@/content/types";
 import { createDefaultLearner } from "@/lib/session/store";
 import { isSupabaseConfigured } from "@/lib/supabase/client";
+import type { VocabEntry } from "@/content/types";
 import {
   fetchLearnerFromSupabase,
   persistDebrief,
   persistLearnerProfile,
+  persistVocabEntry,
   resetRemoteLearner,
 } from "@/lib/supabase/learner-sync";
 
@@ -147,6 +149,31 @@ export async function saveLearnerAfterDebrief(
   const result = await persistDebrief(learner, missionId, debrief);
   if (!result.ok) return { error: result.error };
   return {};
+}
+
+export function updateVocabStatus(
+  learner: LearnerProfile,
+  word: string,
+  status: VocabEntry["status"],
+): LearnerProfile {
+  const now = new Date().toISOString();
+  const vocab = learner.vocab.map((v) =>
+    v.word.toLowerCase() === word.toLowerCase()
+      ? {
+          ...v,
+          status,
+          timesSeen: v.timesSeen + 1,
+          lastSeenAt: now,
+        }
+      : v,
+  );
+  const next = { ...learner, vocab, updatedAt: now };
+  saveLocal(next);
+  if (isSupabaseConfigured()) {
+    const entry = vocab.find((v) => v.word.toLowerCase() === word.toLowerCase());
+    if (entry) void persistVocabEntry(entry);
+  }
+  return next;
 }
 
 export async function resetLearner(): Promise<LearnerProfile> {
