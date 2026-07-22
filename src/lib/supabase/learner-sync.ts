@@ -173,6 +173,38 @@ export async function fetchLearnerFromSupabase(): Promise<LearnerProfile | null>
   };
 }
 
+export type MissionRunRow = {
+  id: string;
+  mission_id: string;
+  outcome: "success" | "partial" | "fail";
+  score: number;
+  xp_earned: number;
+  summary: string;
+  created_at: string;
+};
+
+export async function fetchMissionHistory(
+  limit = 12,
+): Promise<{ runs: MissionRunRow[]; error?: string }> {
+  if (!isSupabaseConfigured()) return { runs: [] };
+  const ensured = await ensureBubblecastUser();
+  if (!ensured?.userId) {
+    return { runs: [], error: ensured?.error };
+  }
+  const supabase = getSupabaseBrowserClient();
+  if (!supabase) return { runs: [] };
+
+  const { data, error } = await supabase
+    .from("bubblecast_mission_runs")
+    .select("id,mission_id,outcome,score,xp_earned,summary,created_at")
+    .eq("user_id", ensured.userId)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
+  if (error) return { runs: [], error: error.message };
+  return { runs: (data ?? []) as MissionRunRow[] };
+}
+
 export async function persistVocabEntry(
   entry: VocabEntry,
 ): Promise<{ ok: boolean; error?: string }> {

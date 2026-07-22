@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { harborline } from "@/content/harborline/world";
 import type { LearnerProfile } from "@/content/types";
+import { ActiveMissionBanner } from "./ActiveMissionBanner";
 
 export function CityMap({ learner }: { learner: LearnerProfile }) {
   return (
@@ -24,6 +25,8 @@ export function CityMap({ learner }: { learner: LearnerProfile }) {
           </div>
         </div>
       </div>
+
+      <ActiveMissionBanner />
 
       <div className="relative min-h-[360px] overflow-hidden rounded-3xl border border-sky-100 bg-gradient-to-br from-sky-100 via-amber-50 to-emerald-50 shadow-inner">
         <div className="pointer-events-none absolute inset-0 opacity-40 [background-image:radial-gradient(#94a3b8_1px,transparent_1px)] [background-size:18px_18px]" />
@@ -60,7 +63,7 @@ export function CityMap({ learner }: { learner: LearnerProfile }) {
                               <span className="text-xs text-slate-400">{m.difficulty}</span>
                             </span>
                             {done ? (
-                              <span className="text-xs text-emerald-600">done</span>
+                              <span className="text-xs text-emerald-600">replay</span>
                             ) : (
                               <span className="text-xs text-orange-600">play →</span>
                             )}

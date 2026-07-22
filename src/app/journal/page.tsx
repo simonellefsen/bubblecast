@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { AppShell } from "@/components/AppShell";
+import { MissionHistory } from "@/components/MissionHistory";
 import { VocabPractice } from "@/components/VocabPractice";
 import type { LearnerProfile } from "@/content/types";
 import { hydrateLearner } from "@/lib/learner-client";
@@ -45,6 +46,16 @@ export default function JournalPage() {
           </div>
 
           <VocabPractice learner={learner} onUpdate={setLearner} />
+
+          <section className="rounded-2xl border bg-white p-4 shadow-sm">
+            <h2 className="font-semibold">Recent debriefs</h2>
+            <p className="mt-1 text-xs text-slate-500">
+              From cloud mission runs (newest first)
+            </p>
+            <div className="mt-3">
+              <MissionHistory />
+            </div>
+          </section>
 
           <section className="rounded-2xl border bg-white p-4 shadow-sm">
             <h2 className="font-semibold">Completed missions</h2>

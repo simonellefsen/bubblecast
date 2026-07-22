@@ -46,6 +46,7 @@ export function MissionPlayer({ missionId }: { missionId: string }) {
   const [hintText, setHintText] = useState<string | null>(null);
   const [resumed, setResumed] = useState(false);
   const [streaming, setStreaming] = useState(false);
+  const [loadingStep, setLoadingStep] = useState("Checking traveler profile…");
   const scroller = useRef<HTMLDivElement>(null);
 
   function commitSession(
@@ -69,10 +70,12 @@ export function MissionPlayer({ missionId }: { missionId: string }) {
       setError(null);
       setResumed(false);
       try {
+        setLoadingStep("Checking traveler profile…");
         const { learner: hydrated } = await hydrateLearner();
         if (cancelled) return;
         setLearner(hydrated);
 
+        setLoadingStep("Looking for a saved scene…");
         const existing = loadActiveScene(missionId);
         if (existing?.session) {
           setSession(existing.session);
@@ -81,6 +84,7 @@ export function MissionPlayer({ missionId }: { missionId: string }) {
           return;
         }
 
+        setLoadingStep("Director planning beats + comic (in parallel)…");
         const res = await fetch("/api/scene/start", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -96,6 +100,7 @@ export function MissionPlayer({ missionId }: { missionId: string }) {
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Failed to start");
         if (cancelled) return;
+        setLoadingStep("Setting the stage…");
         const nextPhase = data.session.comic ? "comic" : "live";
         commitSession(data.session, nextPhase);
       } catch (e) {
@@ -337,9 +342,25 @@ export function MissionPlayer({ missionId }: { missionId: string }) {
 
   if (phase === "loading" || !learner) {
     return (
-      <div className="flex min-h-[40vh] flex-col items-center justify-center gap-3 text-slate-600">
+      <div className="flex min-h-[40vh] flex-col items-center justify-center gap-4 text-slate-600">
         <div className="h-10 w-10 animate-spin rounded-full border-4 border-orange-200 border-t-orange-500" />
-        <p>Director is setting the stage…</p>
+        <div className="text-center">
+          <p className="font-medium text-slate-800">Setting up your scene</p>
+          <p className="mt-1 max-w-sm text-sm text-slate-500">{loadingStep}</p>
+        </div>
+        <ol className="space-y-1 text-left text-xs text-slate-400">
+          {[
+            "Profile",
+            "Saved scene check",
+            "Director + comic (parallel)",
+            "Stage ready",
+          ].map((label) => (
+            <li key={label} className="flex items-center gap-2">
+              <span className="h-1.5 w-1.5 rounded-full bg-orange-300" />
+              {label}
+            </li>
+          ))}
+        </ol>
       </div>
     );
   }

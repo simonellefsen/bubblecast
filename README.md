@@ -23,6 +23,8 @@ Default pair: **English → Spanish**, CEFR A1–B1.
 - **Streaming NPC bubbles**: live turns stream via NDJSON so dialogue appears progressively  
 - **Cost / latency guards**: parallel mission start, AI timeouts, turn budget, session size limits  
 - **Journal practice**: flip cards, mark new/fuzzy/known (syncs to Supabase)  
+- **Hub continuity**: resume in-progress missions from the map; cloud debrief history  
+
 
 
 

@@ -70,6 +70,26 @@ export function clearActiveScene(missionId: string) {
   }
 }
 
+/** Scan sessionStorage for any resumable Bubblecast scenes. */
+export function listActiveScenes(): StoredMissionState[] {
+  if (typeof window === "undefined") return [];
+  const out: StoredMissionState[] = [];
+  try {
+    for (let i = 0; i < sessionStorage.length; i++) {
+      const k = sessionStorage.key(i);
+      if (!k?.startsWith(PREFIX)) continue;
+      const missionId = k.slice(PREFIX.length);
+      const state = loadActiveScene(missionId);
+      if (state) out.push(state);
+    }
+  } catch {
+    return out;
+  }
+  return out.sort(
+    (a, b) => new Date(b.savedAt).getTime() - new Date(a.savedAt).getTime(),
+  );
+}
+
 export function saveLastDebrief(missionId: string, debrief: DebriefPacket) {
   if (typeof window === "undefined") return;
   try {
