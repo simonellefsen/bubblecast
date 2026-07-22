@@ -20,6 +20,8 @@ Default pair: **English → Spanish**, CEFR A1–B1.
 - **Supabase** (shared free project): schema `bubblecast` + views `public.bubblecast_*`  
 - Local cache in `localStorage` + anonymous auth cloud sync  
 - **Serverless-safe scenes**: full session state is sent with each turn (works on Vercel); mid-mission refresh recovers from `sessionStorage`  
+- **Streaming NPC bubbles**: live turns stream via NDJSON so dialogue appears progressively  
+
 
 
 ## Setup

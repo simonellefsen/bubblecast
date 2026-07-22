@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import type { SceneSession } from "@/content/types";
-import { beginLive, learnerTurn } from "@/lib/ai/scene-service";
+import {
+  beginLive,
+  learnerTurn,
+  streamLearnerTurn,
+} from "@/lib/ai/scene-service";
 
 export async function POST(req: Request) {
   try {
@@ -8,6 +12,7 @@ export async function POST(req: Request) {
       session?: SceneSession;
       text?: string;
       action?: "begin_live" | "speak";
+      stream?: boolean;
     };
 
     if (!body.session?.id) {
@@ -24,6 +29,17 @@ export async function POST(req: Request) {
 
     if (!body.text?.trim()) {
       return NextResponse.json({ error: "text required" }, { status: 400 });
+    }
+
+    if (body.stream) {
+      const stream = streamLearnerTurn(body.session, body.text.trim());
+      return new Response(stream, {
+        headers: {
+          "Content-Type": "application/x-ndjson; charset=utf-8",
+          "Cache-Control": "no-cache, no-transform",
+          Connection: "keep-alive",
+        },
+      });
     }
 
     const session = await learnerTurn(body.session, body.text.trim());

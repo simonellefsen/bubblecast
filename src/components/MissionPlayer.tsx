@@ -45,6 +45,7 @@ export function MissionPlayer({ missionId }: { missionId: string }) {
   const [hintLevel, setHintLevel] = useState(0);
   const [hintText, setHintText] = useState<string | null>(null);
   const [resumed, setResumed] = useState(false);
+  const [streaming, setStreaming] = useState(false);
   const scroller = useRef<HTMLDivElement>(null);
 
   function commitSession(
@@ -146,6 +147,7 @@ export function MissionPlayer({ missionId }: { missionId: string }) {
     e?.preventDefault();
     if (!session || !input.trim() || busy) return;
     setBusy(true);
+    setStreaming(true);
     setHintText(null);
     const text = input.trim();
     setInput("");
@@ -153,16 +155,90 @@ export function MissionPlayer({ missionId }: { missionId: string }) {
       const res = await fetch("/api/scene/turn", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ session, text }),
+        body: JSON.stringify({ session, text, stream: true }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Turn failed");
-      commitSession(data.session, "live");
+
+      if (!res.ok) {
+        // Fallback to non-stream JSON
+        const failBody = await res.json().catch(() => ({}));
+        throw new Error(failBody.error || "Turn failed");
+      }
+
+      const contentType = res.headers.get("content-type") ?? "";
+      if (!contentType.includes("ndjson") || !res.body) {
+        const data = await res.json();
+        if (data.session) commitSession(data.session, "live");
+        return;
+      }
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let lastSession: SceneSession | null = null;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          try {
+            const event = JSON.parse(line) as {
+              type: string;
+              session?: SceneSession;
+              error?: string;
+            };
+            if (event.error) throw new Error(event.error);
+            if (event.session) {
+              lastSession = event.session;
+              // Live preview — don't spam sessionStorage every chunk
+              setSession(event.session);
+              setPhase("live");
+              if (event.type === "done") {
+                commitSession(event.session, "live");
+              }
+            }
+          } catch (parseErr) {
+            if (parseErr instanceof SyntaxError) continue;
+            throw parseErr;
+          }
+        }
+      }
+
+      if (buffer.trim()) {
+        try {
+          const event = JSON.parse(buffer) as {
+            type: string;
+            session?: SceneSession;
+          };
+          if (event.session) {
+            lastSession = event.session;
+            commitSession(event.session, "live");
+          }
+        } catch {
+          /* ignore trailing junk */
+        }
+      }
+
+      if (!lastSession) {
+        // Ultimate fallback: non-stream request
+        const res2 = await fetch("/api/scene/turn", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ session, text, stream: false }),
+        });
+        const data = await res2.json();
+        if (!res2.ok) throw new Error(data.error || "Turn failed");
+        commitSession(data.session, "live");
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Turn failed");
       setInput(text);
     } finally {
       setBusy(false);
+      setStreaming(false);
     }
   }
 
@@ -394,9 +470,19 @@ export function MissionPlayer({ missionId }: { missionId: string }) {
               ref={scroller}
               className="flex max-h-[420px] flex-col gap-3 overflow-y-auto bg-white/55 p-4 backdrop-blur"
             >
-              {session.turns.map((t, i) => (
-                <SpeechBubble key={`${t.at}-${i}`} turn={t} showGloss={showGloss} />
-              ))}
+              {session.turns.map((t, i) => {
+                const isLast = i === session.turns.length - 1;
+                const isStreamingBubble =
+                  streaming && isLast && t.role === "npc";
+                return (
+                  <SpeechBubble
+                    key={`${t.at}-${i}-${t.role}`}
+                    turn={t}
+                    showGloss={showGloss}
+                    streaming={isStreamingBubble}
+                  />
+                );
+              })}
             </div>
 
             {hintText ? (

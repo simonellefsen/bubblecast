@@ -6,9 +6,11 @@ import { getCharacter } from "@/content/harborline/world";
 export function SpeechBubble({
   turn,
   showGloss,
+  streaming = false,
 }: {
   turn: SceneTurn;
   showGloss: boolean;
+  streaming?: boolean;
 }) {
   if (turn.role === "system") {
     return (
@@ -38,7 +40,7 @@ export function SpeechBubble({
           isLearner
             ? "rounded-br-md bg-slate-900 text-white"
             : "rounded-bl-md border bg-white text-slate-900"
-        }`}
+        } ${streaming && !isLearner ? "ring-2 ring-orange-200" : ""}`}
         style={!isLearner ? { borderColor: color } : undefined}
       >
         <div
@@ -52,8 +54,18 @@ export function SpeechBubble({
               {emotionLabel(turn.emotion)}
             </span>
           ) : null}
+          {streaming && !isLearner ? (
+            <span className="ml-2 font-normal normal-case text-orange-500">
+              typing…
+            </span>
+          ) : null}
         </div>
-        <p className="text-[15px] leading-relaxed">{turn.text}</p>
+        <p className="text-[15px] leading-relaxed whitespace-pre-wrap">
+          {turn.text}
+          {streaming && !isLearner ? (
+            <span className="ml-0.5 inline-block h-3 w-1 animate-pulse bg-orange-400 align-middle" />
+          ) : null}
+        </p>
         {showGloss && turn.gloss ? (
           <p
             className={`mt-1 text-xs ${
