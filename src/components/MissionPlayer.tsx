@@ -568,6 +568,10 @@ export function MissionPlayer({ missionId }: { missionId: string }) {
 
             <div
               ref={scroller}
+              role="log"
+              aria-live="polite"
+              aria-relevant="additions"
+              aria-busy={streaming}
               className="flex max-h-[50vh] flex-col gap-3 overflow-y-auto bg-white/55 p-4 backdrop-blur sm:max-h-[420px]"
             >
               {session.turns.map((t, i) => {
@@ -657,7 +661,16 @@ export function MissionPlayer({ missionId }: { missionId: string }) {
                 Turns {session.turnCount}/{session.maxTurns}
               </p>
             </div>
-            <TargetPhrases phrases={mission.targetPhrases} />
+            <TargetPhrases
+              phrases={mission.targetPhrases}
+              onInsert={(phrase) => {
+                setInput((prev) => {
+                  const trimmed = prev.trim();
+                  return trimmed ? `${trimmed} ${phrase}` : phrase;
+                });
+                requestAnimationFrame(() => inputRef.current?.focus());
+              }}
+            />
           </aside>
         </div>
       ) : null}
@@ -690,19 +703,38 @@ export function MissionPlayer({ missionId }: { missionId: string }) {
   );
 }
 
-function TargetPhrases({ phrases }: { phrases: string[] }) {
+function TargetPhrases({
+  phrases,
+  onInsert,
+}: {
+  phrases: string[];
+  /** When set, phrases become a tappable phrase bank. */
+  onInsert?: (phrase: string) => void;
+}) {
   return (
     <div className="rounded-2xl border bg-white p-3 shadow-sm">
       <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-400">
         Target phrases
       </h3>
+      {onInsert ? (
+        <p className="mt-1 text-[11px] text-slate-400">Tap to insert into your reply</p>
+      ) : null}
       <ul className="mt-2 flex flex-wrap gap-2">
         {phrases.map((p) => (
-          <li
-            key={p}
-            className="rounded-full bg-orange-50 px-2.5 py-1 text-xs font-medium text-orange-800"
-          >
-            {p}
+          <li key={p}>
+            {onInsert ? (
+              <button
+                type="button"
+                onClick={() => onInsert(p)}
+                className="rounded-full bg-orange-50 px-2.5 py-1 text-left text-xs font-medium text-orange-800 ring-orange-200 transition hover:bg-orange-100 hover:ring-2 active:scale-[0.98]"
+              >
+                {p}
+              </button>
+            ) : (
+              <span className="rounded-full bg-orange-50 px-2.5 py-1 text-xs font-medium text-orange-800">
+                {p}
+              </span>
+            )}
           </li>
         ))}
       </ul>
