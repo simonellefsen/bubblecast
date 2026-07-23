@@ -34,7 +34,15 @@ import {
   buildPhraseBank,
   phraseAnswersMatch,
 } from "@/lib/phrase-bank";
-import { shouldRequestAtmosphere } from "@/lib/prefs";
+import {
+  shouldRequestAtmosphere,
+  shouldRequestPortrait,
+} from "@/lib/prefs";
+import {
+  clearCachedPortraits,
+  getCachedPortrait,
+  setCachedPortrait,
+} from "@/lib/portrait-cache";
 import { getOfflineScript } from "@/content/harborline/offline-scripts";
 import { getMission, harborline } from "@/content/harborline/world";
 import {
@@ -452,5 +460,20 @@ describe("offline mission scripts", () => {
         );
       }
     }
+  });
+});
+
+describe("cast portrait cache", () => {
+  it("stores portraits by character id", () => {
+    clearCachedPortraits("mira");
+    assert.equal(getCachedPortrait("mira"), null);
+    setCachedPortrait("mira", "data:image/png;base64,xx");
+    assert.equal(getCachedPortrait("mira"), "data:image/png;base64,xx");
+    clearCachedPortraits("mira");
+  });
+
+  it("gates portrait requests on budget", () => {
+    assert.equal(shouldRequestPortrait(1), false);
+    assert.equal(shouldRequestPortrait(2), true);
   });
 });

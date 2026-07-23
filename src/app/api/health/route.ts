@@ -8,12 +8,15 @@ export async function GET() {
   );
   const comicAtmosphereServer =
     hasApiKey() && process.env.XAI_COMIC_ATMOSPHERE !== "0";
+  const castPortraitsServer =
+    hasApiKey() && process.env.XAI_CAST_PORTRAITS !== "0";
 
   return NextResponse.json({
     ok: true,
     hasXaiKey: hasApiKey(),
     hasSupabase,
     comicAtmosphereServer,
+    castPortraitsServer,
     model: MODEL_ID,
     world: "harborline",
     missions: 7,

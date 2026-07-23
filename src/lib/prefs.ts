@@ -1,6 +1,7 @@
 "use client";
 
 const ATMOSPHERE_KEY = "bubblecast-pref-comic-atmosphere-v1";
+const PORTRAITS_KEY = "bubblecast-pref-cast-portraits-v1";
 
 /** User preference for Imagine comic atmosphere (default: on). */
 export function loadComicAtmospherePref(): boolean {
@@ -32,4 +33,30 @@ export function shouldRequestAtmosphere(opts: {
   if (!opts.includeComic || !opts.prefEnabled) return false;
   // Keep at least 2 actions after start for a short scene turn
   return opts.remainingBudget >= 3;
+}
+
+/** Prefer Imagine cast portraits on Cast page (default: on). */
+export function loadCastPortraitPref(): boolean {
+  if (typeof window === "undefined") return true;
+  try {
+    const raw = localStorage.getItem(PORTRAITS_KEY);
+    if (raw === null) return true;
+    return raw === "1" || raw === "true";
+  } catch {
+    return true;
+  }
+}
+
+export function saveCastPortraitPref(enabled: boolean) {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(PORTRAITS_KEY, enabled ? "1" : "0");
+  } catch {
+    /* ignore */
+  }
+}
+
+/** One portrait needs budget headroom for a few live turns after. */
+export function shouldRequestPortrait(remainingBudget: number): boolean {
+  return remainingBudget >= 2;
 }

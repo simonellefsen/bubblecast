@@ -1,19 +1,53 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { AppShell } from "@/components/AppShell";
 import { CharacterAvatar } from "@/components/CharacterAvatar";
 import {
   harborline,
   isMissionUnlocked,
 } from "@/content/harborline/world";
-import type { LearnerProfile } from "@/content/types";
+import type { CharacterId, LearnerProfile } from "@/content/types";
 import { bondLabel, parseMemoryNotes } from "@/lib/cast-memory";
 import { hydrateLearner } from "@/lib/learner-client";
+import {
+  countCachedPortraits,
+  getCachedPortrait,
+  setCachedPortrait,
+} from "@/lib/portrait-cache";
+import {
+  loadCastPortraitPref,
+  saveCastPortraitPref,
+  shouldRequestPortrait,
+} from "@/lib/prefs";
+import {
+  checkAiBudget,
+  DAILY_AI_SOFT_CAP,
+  loadUsage,
+  recordAiUsage,
+} from "@/lib/usage";
 
 export default function CastPage() {
   const [learner, setLearner] = useState<LearnerProfile | null>(null);
+  const [portraits, setPortraits] = useState<Partial<Record<CharacterId, string>>>(
+    {},
+  );
+  const [pref, setPref] = useState(true);
+  const [busyId, setBusyId] = useState<CharacterId | null>(null);
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
+  const [tick, setTick] = useState(0);
+
+  const refreshPortraits = useCallback(() => {
+    const next: Partial<Record<CharacterId, string>> = {};
+    for (const c of harborline.characters) {
+      const url = getCachedPortrait(c.id);
+      if (url) next[c.id] = url;
+    }
+    setPortraits(next);
+    setTick((t) => t + 1);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -21,24 +55,124 @@ export default function CastPage() {
       const { learner: hydrated } = await hydrateLearner();
       if (!cancelled) setLearner(hydrated);
     })();
+    setPref(loadCastPortraitPref());
+    refreshPortraits();
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [refreshPortraits]);
 
   const completed = learner?.completedMissionIds ?? [];
+  const remaining = Math.max(0, DAILY_AI_SOFT_CAP - loadUsage().count);
+  const cachedCount = countCachedPortraits(
+    harborline.characters.map((c) => c.id),
+  );
+
+  async function generateOne(characterId: CharacterId): Promise<boolean> {
+    if (!shouldRequestPortrait(Math.max(0, DAILY_AI_SOFT_CAP - loadUsage().count))) {
+      setNote("AI budget too low for a new portrait (need ~2 actions left).");
+      return false;
+    }
+    const budget = checkAiBudget(1);
+    if (!budget.ok) {
+      setNote(budget.message);
+      return false;
+    }
+    setBusyId(characterId);
+    try {
+      const res = await fetch("/api/cast/portrait", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ characterId }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Portrait failed");
+      if (data.portrait?.dataUrl) {
+        setCachedPortrait(characterId, data.portrait.dataUrl as string);
+        recordAiUsage(1);
+        refreshPortraits();
+        return true;
+      }
+      setNote(
+        data.reason === "disabled"
+          ? "Portraits disabled on server (XAI_CAST_PORTRAITS=0)."
+          : "Portrait unavailable (no key or Imagine error).",
+      );
+      return false;
+    } catch (e) {
+      setNote(e instanceof Error ? e.message : "Portrait failed");
+      return false;
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function generateMissing() {
+    if (!pref) {
+      setNote("Turn on Imagine portraits first.");
+      return;
+    }
+    setBulkBusy(true);
+    setNote(null);
+    let made = 0;
+    for (const c of harborline.characters) {
+      if (getCachedPortrait(c.id)) continue;
+      const ok = await generateOne(c.id);
+      if (!ok) break;
+      made += 1;
+    }
+    setBulkBusy(false);
+    if (made > 0) {
+      setNote(`Generated ${made} portrait${made === 1 ? "" : "s"} (cached this session).`);
+    }
+  }
 
   return (
     <AppShell title="Cast">
       <div className="space-y-6">
-        <div>
-          <h1 className="text-3xl font-semibold tracking-tight">The cast</h1>
-          <p className="mt-1 max-w-2xl text-slate-600">
-            Recurring characters in {harborline.name}. Relationships grow when you
-            complete scenes with them.
-          </p>
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h1 className="text-3xl font-semibold tracking-tight">The cast</h1>
+            <p className="mt-1 max-w-2xl text-slate-600">
+              Recurring characters in {harborline.name}. Relationships grow when you
+              complete scenes with them.
+            </p>
+          </div>
+          <div className="rounded-2xl border bg-white px-4 py-3 text-sm shadow-sm">
+            <label className="flex items-center gap-2 text-slate-700">
+              <input
+                type="checkbox"
+                checked={pref}
+                onChange={(e) => {
+                  const v = e.target.checked;
+                  setPref(v);
+                  saveCastPortraitPref(v);
+                }}
+              />
+              Imagine portraits
+            </label>
+            <p className="mt-1 text-xs text-slate-400">
+              {cachedCount}/{harborline.characters.length} cached · ~{remaining} AI
+              left
+            </p>
+            <button
+              type="button"
+              disabled={bulkBusy || !pref}
+              onClick={() => void generateMissing()}
+              className="mt-2 rounded-full bg-orange-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-orange-600 disabled:opacity-50"
+            >
+              {bulkBusy ? "Generating…" : "Generate missing"}
+            </button>
+          </div>
         </div>
-        <div className="grid gap-4 sm:grid-cols-2">
+
+        {note ? (
+          <p className="rounded-xl border border-amber-100 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+            {note}
+          </p>
+        ) : null}
+
+        <div className="grid gap-4 sm:grid-cols-2" key={tick}>
           {harborline.characters.map((c) => {
             const rel = learner?.relationships.find((r) => r.characterId === c.id);
             const score = rel?.score ?? 20;
@@ -47,12 +181,34 @@ export default function CastPage() {
             const missions = harborline.missions.filter((m) =>
               m.castIds.includes(c.id),
             );
+            const portrait = portraits[c.id] ?? null;
             return (
               <article
                 key={c.id}
                 className="flex gap-4 rounded-2xl border bg-white p-4 shadow-sm"
               >
-                <CharacterAvatar character={c} size="lg" emotion="warm" />
+                <div className="flex flex-col items-center gap-2">
+                  <CharacterAvatar
+                    character={c}
+                    size="lg"
+                    emotion="warm"
+                    portraitUrl={portrait}
+                  />
+                  {pref ? (
+                    <button
+                      type="button"
+                      disabled={busyId === c.id || bulkBusy}
+                      onClick={() => void generateOne(c.id)}
+                      className="text-[11px] font-medium text-orange-700 underline disabled:opacity-50"
+                    >
+                      {busyId === c.id
+                        ? "…"
+                        : portrait
+                          ? "Regenerate"
+                          : "Imagine"}
+                    </button>
+                  ) : null}
+                </div>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-start justify-between gap-2">
                     <div>

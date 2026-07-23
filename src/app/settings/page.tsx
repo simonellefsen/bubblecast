@@ -25,7 +25,9 @@ import { clearAllActiveScenes } from "@/lib/session/client-session";
 import { evaluateAchievements } from "@/lib/achievements";
 import { loadStreak } from "@/lib/streak";
 import {
+  loadCastPortraitPref,
   loadComicAtmospherePref,
+  saveCastPortraitPref,
   saveComicAtmospherePref,
 } from "@/lib/prefs";
 import { DAILY_AI_SOFT_CAP, loadUsage } from "@/lib/usage";
@@ -38,9 +40,11 @@ export default function SettingsPage() {
     hasXaiKey: boolean;
     hasSupabase?: boolean;
     comicAtmosphereServer?: boolean;
+    castPortraitsServer?: boolean;
     model: string;
   } | null>(null);
   const [comicAtmosphere, setComicAtmosphere] = useState(true);
+  const [castPortraits, setCastPortraits] = useState(true);
   const [saved, setSaved] = useState(false);
   const [cloudNote, setCloudNote] = useState<string | null>(null);
   const [backupNote, setBackupNote] = useState<string | null>(null);
@@ -80,6 +84,7 @@ export default function SettingsPage() {
     setStreak(loadStreak().count);
     setAiUsage(loadUsage().count);
     setComicAtmosphere(loadComicAtmospherePref());
+    setCastPortraits(loadCastPortraitPref());
     if (typeof navigator !== "undefined" && "serviceWorker" in navigator) {
       navigator.serviceWorker.getRegistration().then((reg) => {
         if (!reg) setSwStatus("not registered");
@@ -341,6 +346,22 @@ export default function SettingsPage() {
                   : "…"}
               </dd>
             </div>
+            <div className="flex justify-between gap-3">
+              <dt className="text-slate-500">Imagine portraits (server)</dt>
+              <dd
+                className={
+                  health?.castPortraitsServer
+                    ? "text-emerald-600"
+                    : "text-amber-600"
+                }
+              >
+                {health
+                  ? health.castPortraitsServer
+                    ? "available"
+                    : "off / no key"
+                  : "…"}
+              </dd>
+            </div>
           </dl>
           <label className="mt-3 flex items-center gap-2 text-sm text-slate-600">
             <input
@@ -353,6 +374,18 @@ export default function SettingsPage() {
               }}
             />
             Prefer Imagine atmosphere art on comic warmups (client)
+          </label>
+          <label className="mt-2 flex items-center gap-2 text-sm text-slate-600">
+            <input
+              type="checkbox"
+              checked={castPortraits}
+              onChange={(e) => {
+                const v = e.target.checked;
+                setCastPortraits(v);
+                saveCastPortraitPref(v);
+              }}
+            />
+            Prefer Imagine cast portraits on Cast page (client)
           </label>
           {!supabaseOn ? (
             <p className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-800">
