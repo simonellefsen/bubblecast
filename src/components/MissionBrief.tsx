@@ -15,6 +15,8 @@ export function MissionBrief({
   onStart,
   includeComic,
   onIncludeComicChange,
+  includeAtmosphere,
+  onIncludeAtmosphereChange,
   locked,
   lockHint,
 }: {
@@ -26,6 +28,8 @@ export function MissionBrief({
   onStart: () => void;
   includeComic: boolean;
   onIncludeComicChange: (v: boolean) => void;
+  includeAtmosphere: boolean;
+  onIncludeAtmosphereChange: (v: boolean) => void;
   locked?: boolean;
   lockHint?: string;
 }) {
@@ -35,6 +39,7 @@ export function MissionBrief({
     setAiUsed(loadUsage().count);
   }, []);
   const remaining = Math.max(0, DAILY_AI_SOFT_CAP - aiUsed);
+  const atmosphereBlockedByBudget = includeComic && remaining < 3;
 
   async function copyMissionLink() {
     const url =
@@ -128,14 +133,36 @@ export function MissionBrief({
 
       {!locked ? (
         <>
-          <label className="flex items-center gap-2 text-sm text-slate-600">
-            <input
-              type="checkbox"
-              checked={includeComic}
-              onChange={(e) => onIncludeComicChange(e.target.checked)}
-            />
-            Comic warmup first (recommended)
-          </label>
+          <div className="space-y-2">
+            <label className="flex items-center gap-2 text-sm text-slate-600">
+              <input
+                type="checkbox"
+                checked={includeComic}
+                onChange={(e) => onIncludeComicChange(e.target.checked)}
+              />
+              Comic warmup first (recommended)
+            </label>
+            <label
+              className={`flex items-center gap-2 text-sm ${
+                includeComic ? "text-slate-600" : "text-slate-400"
+              }`}
+            >
+              <input
+                type="checkbox"
+                checked={includeAtmosphere && includeComic}
+                disabled={!includeComic || atmosphereBlockedByBudget}
+                onChange={(e) => onIncludeAtmosphereChange(e.target.checked)}
+              />
+              Imagine atmosphere art
+              {atmosphereBlockedByBudget ? (
+                <span className="text-xs text-amber-700">
+                  (needs ~3 AI budget left)
+                </span>
+              ) : (
+                <span className="text-xs text-slate-400">(+1 AI action)</span>
+              )}
+            </label>
+          </div>
 
           <div className="flex flex-wrap gap-3">
             <button

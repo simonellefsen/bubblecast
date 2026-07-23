@@ -7,6 +7,7 @@ import {
 } from "@/content/harborline/world";
 import { suggestCefrNudge } from "@/lib/cefr-nudge";
 import { isVocabDue, scheduleNextReview } from "@/lib/srs";
+import { shouldRequestAtmosphere } from "@/lib/prefs";
 import type { DebriefPacket, VocabEntry } from "@/content/types";
 
 function debrief(partial: Partial<DebriefPacket>): DebriefPacket {
@@ -108,5 +109,34 @@ describe("srs-lite", () => {
       nextReviewAt: new Date(Date.now() + 86_400_000).toISOString(),
     };
     assert.equal(isVocabDue(entry), false);
+  });
+});
+
+describe("atmosphere preference", () => {
+  it("skips atmosphere without comic or budget", () => {
+    assert.equal(
+      shouldRequestAtmosphere({
+        includeComic: false,
+        prefEnabled: true,
+        remainingBudget: 10,
+      }),
+      false,
+    );
+    assert.equal(
+      shouldRequestAtmosphere({
+        includeComic: true,
+        prefEnabled: true,
+        remainingBudget: 2,
+      }),
+      false,
+    );
+    assert.equal(
+      shouldRequestAtmosphere({
+        includeComic: true,
+        prefEnabled: true,
+        remainingBudget: 5,
+      }),
+      true,
+    );
   });
 });

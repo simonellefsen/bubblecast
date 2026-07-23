@@ -18,6 +18,7 @@ export async function generateComicAtmosphere(
   missionId: string,
 ): Promise<ComicAtmosphere | null> {
   if (!hasApiKey()) return null;
+  // Server kill-switch (default on when key present)
   if (process.env.XAI_COMIC_ATMOSPHERE === "0") return null;
 
   try {

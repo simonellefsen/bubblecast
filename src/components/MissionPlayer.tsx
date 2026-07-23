@@ -35,7 +35,12 @@ import {
 import { applyDebriefToLearner } from "@/lib/session/store";
 import { suggestCefrNudge, type CefrNudge } from "@/lib/cefr-nudge";
 import { recordActivity } from "@/lib/streak";
-import { checkAiBudget, DAILY_AI_SOFT_CAP, recordAiUsage } from "@/lib/usage";
+import {
+  loadComicAtmospherePref,
+  saveComicAtmospherePref,
+  shouldRequestAtmosphere,
+} from "@/lib/prefs";
+import { checkAiBudget, DAILY_AI_SOFT_CAP, loadUsage, recordAiUsage } from "@/lib/usage";
 import { AchievementsPanel } from "./AchievementsPanel";
 import { CharacterAvatar } from "./CharacterAvatar";
 import { ComicReader } from "./ComicReader";
@@ -65,6 +70,7 @@ export function MissionPlayer({ missionId }: { missionId: string }) {
   const [resumed, setResumed] = useState(false);
   const [streaming, setStreaming] = useState(false);
   const [includeComic, setIncludeComic] = useState(true);
+  const [includeAtmosphere, setIncludeAtmosphere] = useState(true);
   const [loadingStep, setLoadingStep] = useState("Checking traveler profile…");
   const [unlockedNow, setUnlockedNow] = useState<MissionTemplate[]>([]);
   const [streakCount, setStreakCount] = useState(0);
@@ -104,6 +110,7 @@ export function MissionPlayer({ missionId }: { missionId: string }) {
         setLearner(hydrated);
 
         setLoadingStep("Looking for a saved scene…");
+        setIncludeAtmosphere(loadComicAtmospherePref());
         const existing = loadActiveScene(missionId);
         if (existing?.session) {
           setSession(existing.session);
@@ -131,6 +138,13 @@ export function MissionPlayer({ missionId }: { missionId: string }) {
       setError(mission.unlockHint ?? "Mission locked");
       return;
     }
+    const remaining = Math.max(0, DAILY_AI_SOFT_CAP - loadUsage().count);
+    const wantAtmosphere = shouldRequestAtmosphere({
+      includeComic,
+      prefEnabled: includeAtmosphere,
+      remainingBudget: remaining,
+    });
+    // Start costs 1; atmosphere may cost +1 when it actually returns
     const budget = checkAiBudget(1);
     if (!budget.ok) {
       setError(budget.message);
@@ -141,9 +155,11 @@ export function MissionPlayer({ missionId }: { missionId: string }) {
     setError(null);
     try {
       setLoadingStep(
-        includeComic
-          ? "Director + comic + atmosphere (in parallel)…"
-          : "Director planning beats…",
+        wantAtmosphere
+          ? "Director + comic + Imagine atmosphere…"
+          : includeComic
+            ? "Director + comic script…"
+            : "Director planning beats…",
       );
       const learnerContext = buildSceneLearnerContext(learner, mission.castIds);
       const res = await fetch("/api/scene/start", {
@@ -156,7 +172,7 @@ export function MissionPlayer({ missionId }: { missionId: string }) {
             displayName: learner.displayName,
           },
           includeComic,
-          includeAtmosphere: includeComic,
+          includeAtmosphere: wantAtmosphere,
           learnerContext,
         }),
       });
@@ -173,10 +189,10 @@ export function MissionPlayer({ missionId }: { missionId: string }) {
       setLoadingStep("Setting the stage…");
       const nextPhase = data.session.comic ? "comic" : "live";
       commitSession(data.session, nextPhase);
-      if (budget.warn) {
-        setError(
-          `AI budget tip: ~${budget.remaining} free actions left today (soft cap).`,
-        );
+      const after = loadUsage().count;
+      if (after >= DAILY_AI_SOFT_CAP * 0.8) {
+        const left = Math.max(0, DAILY_AI_SOFT_CAP - after);
+        setError(`AI budget tip: ~${left} free actions left today (soft cap).`);
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to start mission");
@@ -479,6 +495,11 @@ export function MissionPlayer({ missionId }: { missionId: string }) {
         onStart={() => void startFromBrief()}
         includeComic={includeComic}
         onIncludeComicChange={setIncludeComic}
+        includeAtmosphere={includeAtmosphere}
+        onIncludeAtmosphereChange={(v) => {
+          setIncludeAtmosphere(v);
+          saveComicAtmospherePref(v);
+        }}
         locked={locked}
         lockHint={mission.unlockHint}
       />

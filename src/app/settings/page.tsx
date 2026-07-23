@@ -24,6 +24,10 @@ import { pushFullLearnerProgress } from "@/lib/supabase/learner-sync";
 import { clearAllActiveScenes } from "@/lib/session/client-session";
 import { evaluateAchievements } from "@/lib/achievements";
 import { loadStreak } from "@/lib/streak";
+import {
+  loadComicAtmospherePref,
+  saveComicAtmospherePref,
+} from "@/lib/prefs";
 import { DAILY_AI_SOFT_CAP, loadUsage } from "@/lib/usage";
 
 const levels: CefrLevel[] = ["A1", "A2", "B1", "B2"];
@@ -33,8 +37,10 @@ export default function SettingsPage() {
   const [health, setHealth] = useState<{
     hasXaiKey: boolean;
     hasSupabase?: boolean;
+    comicAtmosphereServer?: boolean;
     model: string;
   } | null>(null);
+  const [comicAtmosphere, setComicAtmosphere] = useState(true);
   const [saved, setSaved] = useState(false);
   const [cloudNote, setCloudNote] = useState<string | null>(null);
   const [backupNote, setBackupNote] = useState<string | null>(null);
@@ -71,11 +77,17 @@ export default function SettingsPage() {
     })();
     setStreak(loadStreak().count);
     setAiUsage(loadUsage().count);
+    setComicAtmosphere(loadComicAtmospherePref());
     fetch("/api/health")
       .then((r) => r.json())
       .then(setHealth)
       .catch(() =>
-        setHealth({ hasXaiKey: false, hasSupabase: false, model: "unknown" }),
+        setHealth({
+          hasXaiKey: false,
+          hasSupabase: false,
+          comicAtmosphereServer: false,
+          model: "unknown",
+        }),
       );
 
     const supabase = getSupabaseBrowserClient();
@@ -301,7 +313,35 @@ export default function SettingsPage() {
                 {aiUsage}/{DAILY_AI_SOFT_CAP}
               </dd>
             </div>
+            <div className="flex justify-between gap-3">
+              <dt className="text-slate-500">Imagine atmosphere (server)</dt>
+              <dd
+                className={
+                  health?.comicAtmosphereServer
+                    ? "text-emerald-600"
+                    : "text-amber-600"
+                }
+              >
+                {health
+                  ? health.comicAtmosphereServer
+                    ? "available"
+                    : "off / no key"
+                  : "…"}
+              </dd>
+            </div>
           </dl>
+          <label className="mt-3 flex items-center gap-2 text-sm text-slate-600">
+            <input
+              type="checkbox"
+              checked={comicAtmosphere}
+              onChange={(e) => {
+                const v = e.target.checked;
+                setComicAtmosphere(v);
+                saveComicAtmospherePref(v);
+              }}
+            />
+            Prefer Imagine atmosphere art on comic warmups (client)
+          </label>
           {!supabaseOn ? (
             <p className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-800">
               Set <code>NEXT_PUBLIC_SUPABASE_URL</code> and{" "}
