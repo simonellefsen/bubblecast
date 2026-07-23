@@ -201,6 +201,8 @@ export interface SceneSession {
   maxTurns: number;
   comic?: ComicScript;
   learnerContext?: SceneLearnerContext;
+  /** True when scene runs without AI (scripted cast + local debrief). */
+  offline?: boolean;
   createdAt: string;
   updatedAt: string;
 }

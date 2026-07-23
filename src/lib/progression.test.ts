@@ -35,9 +35,16 @@ import {
   phraseAnswersMatch,
 } from "@/lib/phrase-bank";
 import { shouldRequestAtmosphere } from "@/lib/prefs";
+import {
+  matchBeatsFromText,
+  offlineDebrief,
+  offlineLearnerTurn,
+  textHitsPhrase,
+} from "@/lib/session/offline-play";
 import { buildOfflineSession } from "@/lib/session/offline-start";
 import { createDefaultLearner } from "@/lib/session/store";
 import type { DebriefPacket, SceneSession, VocabEntry } from "@/content/types";
+import { getMission } from "@/content/harborline/world";
 
 function debrief(partial: Partial<DebriefPacket>): DebriefPacket {
   return {
@@ -382,5 +389,36 @@ describe("offline session", () => {
     assert.ok(s.comic?.panels.length);
     assert.ok(s.beats.length >= 1);
     assert.equal(s.cefrBaseline, "A1");
+    assert.equal(s.offline, true);
+  });
+
+  it("matches phrases and criteria offline", () => {
+    assert.equal(textHitsPhrase("Quisiera un café, por favor", "Quisiera un café, por favor"), true);
+    assert.equal(textHitsPhrase("hello", "¿Cuánto cuesta?"), false);
+    const mission = getMission("cafe-breakfast");
+    const s = buildOfflineSession({
+      missionId: "cafe-breakfast",
+      cefr: "A1",
+      includeComic: false,
+    });
+    const hits = matchBeatsFromText(mission, "Buenos días", s);
+    assert.ok(hits.includes("greet"));
+  });
+
+  it("scripted turn completes greets and scores debrief", () => {
+    let s = buildOfflineSession({
+      missionId: "cafe-breakfast",
+      cefr: "A1",
+      includeComic: false,
+    });
+    s = offlineLearnerTurn(s, "Buenos días");
+    assert.ok(s.beats.find((b) => b.id === "greet")?.completed);
+    s = offlineLearnerTurn(s, "Quisiera un café, por favor");
+    s = offlineLearnerTurn(s, "¿Cuánto cuesta?");
+    s = offlineLearnerTurn(s, "Gracias");
+    const d = offlineDebrief(s);
+    assert.ok(d.score >= 40);
+    assert.ok(d.xpEarned > 0);
+    assert.ok(["success", "partial"].includes(d.outcome));
   });
 });

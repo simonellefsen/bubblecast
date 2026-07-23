@@ -42,7 +42,7 @@ export function buildOfflineComic(missionId: string): ComicScript {
     })),
     teachingNotes: [
       "Offline mode: phrases from the mission pack (no xAI call).",
-      "Reconnect for full AI cast + debrief scoring.",
+      "Live offline uses scripted NPC replies + local debrief scoring.",
       ...mission.learningGoals.slice(0, 2),
     ],
   };
@@ -50,7 +50,7 @@ export function buildOfflineComic(missionId: string): ComicScript {
 
 /**
  * Full offline scene start — comic + simple beats, no network.
- * Live replies still need AI when online; offline live uses scripted prompts only if extended later.
+ * Live turns use scripted keyword matching (see offline-play.ts).
  */
 export function buildOfflineSession(opts: {
   missionId: string;
@@ -83,6 +83,7 @@ export function buildOfflineSession(opts: {
     castIds: mission.castIds,
     cefr: opts.cefr,
     cefrBaseline: opts.cefr,
+    offline: true,
     status: comic ? "comic" : "live",
     beats,
     turns: comic
@@ -101,7 +102,7 @@ export function buildOfflineSession(opts: {
           },
           {
             role: "system",
-            text: "Offline scene — AI cast is unavailable. Use target phrases; reconnect for full dialogue.",
+            text: "Offline cast — scripted replies from mission phrases. End anytime for a local score.",
             at: now,
           },
         ],

@@ -48,6 +48,13 @@ import {
   saveComicAtmospherePref,
   shouldRequestAtmosphere,
 } from "@/lib/prefs";
+import {
+  isOfflineSession,
+  offlineBeginLive,
+  offlineDebrief,
+  offlineHint,
+  offlineLearnerTurn,
+} from "@/lib/session/offline-play";
 import { buildOfflineSession } from "@/lib/session/offline-start";
 import { checkAiBudget, DAILY_AI_SOFT_CAP, loadUsage, recordAiUsage } from "@/lib/usage";
 import { AchievementsPanel } from "./AchievementsPanel";
@@ -335,6 +342,15 @@ export function MissionPlayer({ missionId }: { missionId: string }) {
     if (!session) return;
     setBusy(true);
     try {
+      if (isOfflineSession(session)) {
+        commitSession(offlineBeginLive(session), "live");
+        setAtmosphereDataUrl(null);
+        setHintText(null);
+        setHintLevel(0);
+        setResumed(false);
+        setError(null);
+        return;
+      }
       // Prefer local transition; keep API for consistency / status stamp
       const res = await fetch("/api/scene/turn", {
         method: "POST",
@@ -350,10 +366,14 @@ export function MissionPlayer({ missionId }: { missionId: string }) {
       setResumed(false);
     } catch (e) {
       // Offline/local fallback if API fails
-      const local = { ...session, status: "live" as const };
+      const local = offlineBeginLive({ ...session, offline: true });
       commitSession(local, "live");
       setAtmosphereDataUrl(null);
-      setError(e instanceof Error ? e.message : "Could not enter scene");
+      setError(
+        e instanceof Error
+          ? `AI unavailable — offline cast: ${e.message}`
+          : "AI unavailable — using offline cast",
+      );
     } finally {
       setBusy(false);
     }
@@ -362,12 +382,48 @@ export function MissionPlayer({ missionId }: { missionId: string }) {
   async function sendTurn(e?: React.FormEvent) {
     e?.preventDefault();
     if (!session || !input.trim() || busy) return;
-    if (typeof navigator !== "undefined" && !navigator.onLine) {
-      setError(
-        "You’re offline — AI cast can’t reply. Use Offline warmup phrases or free drill, then reconnect.",
-      );
+
+    const text = input.trim();
+
+    // Scripted offline path (no AI budget, works offline)
+    if (isOfflineSession(session)) {
+      setBusy(true);
+      setHintText(null);
+      setInput("");
+      try {
+        const next = offlineLearnerTurn(session, text);
+        commitSession(next, "live");
+        setError(null);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Offline turn failed");
+        setInput(text);
+      } finally {
+        setBusy(false);
+        requestAnimationFrame(() => inputRef.current?.focus());
+      }
       return;
     }
+
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      // Auto-switch AI scene into offline scripted mode
+      setBusy(true);
+      setHintText(null);
+      setInput("");
+      try {
+        const base = { ...session, offline: true as const };
+        const next = offlineLearnerTurn(base, text);
+        commitSession(next, "live");
+        setError("Went offline mid-scene — switched to scripted cast.");
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Offline turn failed");
+        setInput(text);
+      } finally {
+        setBusy(false);
+        requestAnimationFrame(() => inputRef.current?.focus());
+      }
+      return;
+    }
+
     const budget = checkAiBudget(1);
     if (!budget.ok) {
       setError(budget.message);
@@ -376,7 +432,6 @@ export function MissionPlayer({ missionId }: { missionId: string }) {
     setBusy(true);
     setStreaming(true);
     setHintText(null);
-    const text = input.trim();
     setInput("");
     try {
       const res = await fetch("/api/scene/turn", {
@@ -486,6 +541,12 @@ export function MissionPlayer({ missionId }: { missionId: string }) {
     const level = levels[Math.min(hintLevel, 2)];
     setBusy(true);
     try {
+      if (isOfflineSession(session) || (typeof navigator !== "undefined" && !navigator.onLine)) {
+        const hint = offlineHint(session, level);
+        setHintText(hint.gloss ? `${hint.text} (${hint.gloss})` : hint.text);
+        setHintLevel((h) => Math.min(h + 1, 3));
+        return;
+      }
       const res = await fetch("/api/scene/hint", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -500,9 +561,47 @@ export function MissionPlayer({ missionId }: { missionId: string }) {
       );
       setHintLevel((h) => Math.min(h + 1, 3));
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Hint failed");
+      // Local beat hints if API fails
+      try {
+        const hint = offlineHint(session, level);
+        setHintText(hint.gloss ? `${hint.text} (${hint.gloss})` : hint.text);
+        setHintLevel((h) => Math.min(h + 1, 3));
+      } catch {
+        setError(err instanceof Error ? err.message : "Hint failed");
+      }
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function applyDebriefLocal(debriefPacket: DebriefPacket) {
+    if (!session || !learner) return;
+    commitSession({ ...session, status: "ended" }, "debrief");
+    setDebrief(debriefPacket);
+    const prevCompleted = learner.completedMissionIds;
+    const updated = applyDebriefToLearner(learner, debriefPacket, mission.id);
+    setUnlockedNow(
+      newlyUnlockedMissions(prevCompleted, updated.completedMissionIds),
+    );
+    const streak = recordActivity();
+    setStreakCount(streak.count);
+    setCefrNudge(suggestCefrNudge(learner.cefr, debriefPacket));
+    setNewAchievements(evaluateAchievements(updated));
+    const { error: syncError } = await saveLearnerAfterDebrief(
+      updated,
+      mission.id,
+      debriefPacket,
+    );
+    try {
+      const { appendLocalDebrief } = await import("@/lib/local-debrief-log");
+      appendLocalDebrief(mission.id, debriefPacket);
+    } catch {
+      /* ignore */
+    }
+    setLearner(updated);
+    clearActiveScene(missionId);
+    if (syncError) {
+      setError(`Saved locally; cloud sync: ${syncError}`);
     }
   }
 
@@ -510,6 +609,12 @@ export function MissionPlayer({ missionId }: { missionId: string }) {
     if (!session || !learner || busy) return;
     setBusy(true);
     try {
+      if (isOfflineSession(session) || (typeof navigator !== "undefined" && !navigator.onLine)) {
+        const packet = offlineDebrief(session);
+        await applyDebriefLocal(packet);
+        setError(null);
+        return;
+      }
       const res = await fetch("/api/scene/end", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -533,7 +638,6 @@ export function MissionPlayer({ missionId }: { missionId: string }) {
         mission.id,
         data.debrief,
       );
-      // Local debrief log (works offline / without Supabase)
       try {
         const { appendLocalDebrief } = await import("@/lib/local-debrief-log");
         appendLocalDebrief(mission.id, data.debrief);
@@ -546,7 +650,18 @@ export function MissionPlayer({ missionId }: { missionId: string }) {
         setError(`Saved locally; cloud sync: ${syncError}`);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not end scene");
+      // Local debrief fallback when AI end fails
+      try {
+        const packet = offlineDebrief({ ...session, offline: true });
+        await applyDebriefLocal(packet);
+        setError(
+          err instanceof Error
+            ? `AI debrief unavailable — local score: ${err.message}`
+            : "AI debrief unavailable — local score applied",
+        );
+      } catch {
+        setError(err instanceof Error ? err.message : "Could not end scene");
+      }
     } finally {
       setBusy(false);
     }
@@ -662,6 +777,7 @@ export function MissionPlayer({ missionId }: { missionId: string }) {
             {location.emoji} {location.name} · mission {mission.difficulty}
             {session ? ` · scene CEFR ${session.cefr}` : ""}
             {session?.cefrAdapted ? " · adapted" : ""}
+            {session && isOfflineSession(session) ? " · offline cast" : ""}
           </p>
           <h1 className="text-2xl font-semibold tracking-tight">{mission.title}</h1>
           <p className="text-sm text-slate-600">{mission.learnerGoal}</p>
