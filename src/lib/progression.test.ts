@@ -7,6 +7,12 @@ import {
 } from "@/content/harborline/world";
 import { suggestCefrNudge } from "@/lib/cefr-nudge";
 import { isVocabDue, scheduleNextReview } from "@/lib/srs";
+import {
+  clearCachedAtmosphere,
+  getCachedAtmosphere,
+  hasCachedAtmosphere,
+  setCachedAtmosphere,
+} from "@/lib/atmosphere-cache";
 import { shouldRequestAtmosphere } from "@/lib/prefs";
 import type { DebriefPacket, VocabEntry } from "@/content/types";
 
@@ -138,5 +144,24 @@ describe("atmosphere preference", () => {
       }),
       true,
     );
+  });
+});
+
+describe("atmosphere location cache", () => {
+  it("stores and retrieves by location id", () => {
+    clearCachedAtmosphere("mercado-cafe");
+    assert.equal(hasCachedAtmosphere("mercado-cafe"), false);
+    const url = "data:image/png;base64,abc";
+    setCachedAtmosphere("mercado-cafe", url);
+    assert.equal(getCachedAtmosphere("mercado-cafe"), url);
+    assert.equal(hasCachedAtmosphere("mercado-cafe"), true);
+    clearCachedAtmosphere("mercado-cafe");
+    assert.equal(getCachedAtmosphere("mercado-cafe"), null);
+  });
+
+  it("ignores non-data urls", () => {
+    clearCachedAtmosphere("hotel-bruma");
+    setCachedAtmosphere("hotel-bruma", "https://example.com/x.png");
+    assert.equal(getCachedAtmosphere("hotel-bruma"), null);
   });
 });

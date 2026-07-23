@@ -17,6 +17,7 @@ export function MissionBrief({
   onIncludeComicChange,
   includeAtmosphere,
   onIncludeAtmosphereChange,
+  atmosphereCached,
   locked,
   lockHint,
 }: {
@@ -30,6 +31,8 @@ export function MissionBrief({
   onIncludeComicChange: (v: boolean) => void;
   includeAtmosphere: boolean;
   onIncludeAtmosphereChange: (v: boolean) => void;
+  /** Cached Imagine art for this location — free to reuse. */
+  atmosphereCached?: boolean;
   locked?: boolean;
   lockHint?: string;
 }) {
@@ -39,7 +42,9 @@ export function MissionBrief({
     setAiUsed(loadUsage().count);
   }, []);
   const remaining = Math.max(0, DAILY_AI_SOFT_CAP - aiUsed);
-  const atmosphereBlockedByBudget = includeComic && remaining < 3;
+  // Cached location art costs nothing; only block fresh Imagine when budget is low
+  const atmosphereBlockedByBudget =
+    includeComic && !atmosphereCached && remaining < 3;
 
   async function copyMissionLink() {
     const url =
@@ -154,7 +159,11 @@ export function MissionBrief({
                 onChange={(e) => onIncludeAtmosphereChange(e.target.checked)}
               />
               Imagine atmosphere art
-              {atmosphereBlockedByBudget ? (
+              {atmosphereCached ? (
+                <span className="text-xs text-emerald-700">
+                  (free — reused for {location.name})
+                </span>
+              ) : atmosphereBlockedByBudget ? (
                 <span className="text-xs text-amber-700">
                   (needs ~3 AI budget left)
                 </span>

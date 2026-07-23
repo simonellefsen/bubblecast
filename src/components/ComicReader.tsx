@@ -48,6 +48,7 @@ export function ComicReader({
           <h2 className="text-xl font-semibold tracking-tight">{comic.title}</h2>
           <p className="text-sm text-slate-500">
             Comic preview · {mode === "focus" ? "← → or buttons to flip panels" : "all panels"}
+            {atmosphereDataUrl ? " · Imagine backdrop" : ""}
           </p>
         </div>
         <div className="flex gap-2 text-xs">
@@ -76,23 +77,14 @@ export function ComicReader({
         </div>
       </div>
 
-      {atmosphereDataUrl ? (
-        <div className="overflow-hidden rounded-2xl border border-orange-100 shadow-sm">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={atmosphereDataUrl}
-            alt=""
-            className="max-h-56 w-full object-cover"
-          />
-          <p className="bg-orange-50/80 px-3 py-1.5 text-center text-[11px] text-orange-800/80">
-            Scene atmosphere · Imagine
-          </p>
-        </div>
-      ) : null}
-
       {mode === "focus" && panel ? (
         <div className="space-y-3">
-          <PanelCard panel={panel} showGloss={showGloss} total={panels.length} />
+          <PanelCard
+            panel={panel}
+            showGloss={showGloss}
+            total={panels.length}
+            atmosphereDataUrl={atmosphereDataUrl}
+          />
           <div className="flex items-center justify-between gap-2">
             <button
               type="button"
@@ -134,6 +126,7 @@ export function ComicReader({
               panel={p}
               showGloss={showGloss}
               total={panels.length}
+              atmosphereDataUrl={atmosphereDataUrl}
             />
           ))}
         </div>
@@ -156,10 +149,12 @@ function PanelCard({
   panel,
   showGloss,
   total,
+  atmosphereDataUrl,
 }: {
   panel: ComicScript["panels"][number];
   showGloss: boolean;
   total: number;
+  atmosphereDataUrl?: string | null;
 }) {
   return (
     <article className="flex flex-col overflow-hidden rounded-2xl border border-orange-100 bg-white shadow-sm">
@@ -174,49 +169,73 @@ function PanelCard({
           </span>
         ) : null}
       </div>
-      <div className="flex flex-1 flex-col gap-3 bg-gradient-to-b from-amber-50/80 to-white p-4">
-        {panel.caption ? (
-          <p className="text-center text-xs italic text-slate-500">{panel.caption}</p>
-        ) : null}
-        <div className="flex justify-center gap-3">
-          {panel.focusCharacterIds.map((id) => {
-            try {
-              const c = getCharacter(id);
-              return <CharacterAvatar key={id} character={c} size="sm" />;
-            } catch {
-              return null;
-            }
-          })}
-        </div>
-        <div className="space-y-2">
-          {panel.lines.map((line, i) => {
-            let speaker: string = String(line.speakerId);
-            let color = "#64748b";
-            if (line.speakerId !== "learner" && line.speakerId !== "narrator") {
+      <div className="relative flex flex-1 flex-col gap-3 overflow-hidden p-4">
+        {atmosphereDataUrl ? (
+          <>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={atmosphereDataUrl}
+              alt=""
+              className="pointer-events-none absolute inset-0 h-full w-full object-cover"
+              aria-hidden
+            />
+            <div
+              className="pointer-events-none absolute inset-0 bg-gradient-to-b from-white/75 via-white/70 to-white/85"
+              aria-hidden
+            />
+          </>
+        ) : (
+          <div
+            className="pointer-events-none absolute inset-0 bg-gradient-to-b from-amber-50/80 to-white"
+            aria-hidden
+          />
+        )}
+        <div className="relative z-[1] flex flex-1 flex-col gap-3">
+          {panel.caption ? (
+            <p className="text-center text-xs italic text-slate-600 drop-shadow-sm">
+              {panel.caption}
+            </p>
+          ) : null}
+          <div className="flex justify-center gap-3">
+            {panel.focusCharacterIds.map((id) => {
               try {
-                const c = getCharacter(line.speakerId);
-                speaker = c.name;
-                color = c.accentColor;
+                const c = getCharacter(id);
+                return <CharacterAvatar key={id} character={c} size="sm" />;
               } catch {
-                /* keep */
+                return null;
               }
-            }
-            return (
-              <div
-                key={i}
-                className="rounded-xl border bg-white px-3 py-2 text-sm shadow-sm"
-                style={{ borderColor: color }}
-              >
-                <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-                  {speaker}
+            })}
+          </div>
+          <div className="space-y-2">
+            {panel.lines.map((line, i) => {
+              let speaker: string = String(line.speakerId);
+              let color = "#64748b";
+              if (line.speakerId !== "learner" && line.speakerId !== "narrator") {
+                try {
+                  const c = getCharacter(line.speakerId);
+                  speaker = c.name;
+                  color = c.accentColor;
+                } catch {
+                  /* keep */
+                }
+              }
+              return (
+                <div
+                  key={i}
+                  className="rounded-xl border bg-white/95 px-3 py-2 text-sm shadow-sm backdrop-blur-sm"
+                  style={{ borderColor: color }}
+                >
+                  <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                    {speaker}
+                  </div>
+                  <p className="font-medium text-slate-900">{line.text}</p>
+                  {showGloss && line.gloss ? (
+                    <p className="text-xs text-slate-500">{line.gloss}</p>
+                  ) : null}
                 </div>
-                <p className="font-medium text-slate-900">{line.text}</p>
-                {showGloss && line.gloss ? (
-                  <p className="text-xs text-slate-500">{line.gloss}</p>
-                ) : null}
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
       </div>
     </article>

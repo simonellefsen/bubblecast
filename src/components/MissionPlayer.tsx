@@ -36,6 +36,10 @@ import { applyDebriefToLearner } from "@/lib/session/store";
 import { suggestCefrNudge, type CefrNudge } from "@/lib/cefr-nudge";
 import { recordActivity } from "@/lib/streak";
 import {
+  getCachedAtmosphere,
+  setCachedAtmosphere,
+} from "@/lib/atmosphere-cache";
+import {
   loadComicAtmospherePref,
   saveComicAtmospherePref,
   shouldRequestAtmosphere,
@@ -116,6 +120,11 @@ export function MissionPlayer({ missionId }: { missionId: string }) {
           setSession(existing.session);
           setPhase(existing.phase);
           setResumed(true);
+          // Restore comic art from location cache (not stored in session JSON)
+          if (existing.phase === "comic") {
+            const cached = getCachedAtmosphere(mission.locationId);
+            if (cached) setAtmosphereDataUrl(cached);
+          }
           return;
         }
 
@@ -139,11 +148,18 @@ export function MissionPlayer({ missionId }: { missionId: string }) {
       return;
     }
     const remaining = Math.max(0, DAILY_AI_SOFT_CAP - loadUsage().count);
-    const wantAtmosphere = shouldRequestAtmosphere({
-      includeComic,
-      prefEnabled: includeAtmosphere,
-      remainingBudget: remaining,
-    });
+    // Prefer cached Imagine art for this location — free, no server call
+    const cachedArt =
+      includeComic && includeAtmosphere
+        ? getCachedAtmosphere(mission.locationId)
+        : null;
+    const wantAtmosphere =
+      !cachedArt &&
+      shouldRequestAtmosphere({
+        includeComic,
+        prefEnabled: includeAtmosphere,
+        remainingBudget: remaining,
+      });
     // Start costs 1; atmosphere may cost +1 when it actually returns
     const budget = checkAiBudget(1);
     if (!budget.ok) {
@@ -155,11 +171,15 @@ export function MissionPlayer({ missionId }: { missionId: string }) {
     setError(null);
     try {
       setLoadingStep(
-        wantAtmosphere
-          ? "Director + comic + Imagine atmosphere…"
-          : includeComic
-            ? "Director + comic script…"
-            : "Director planning beats…",
+        cachedArt
+          ? includeComic
+            ? "Director + comic (reusing location art)…"
+            : "Director planning beats…"
+          : wantAtmosphere
+            ? "Director + comic + Imagine atmosphere…"
+            : includeComic
+              ? "Director + comic script…"
+              : "Director planning beats…",
       );
       const learnerContext = buildSceneLearnerContext(learner, mission.castIds);
       const res = await fetch("/api/scene/start", {
@@ -179,10 +199,13 @@ export function MissionPlayer({ missionId }: { missionId: string }) {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to start");
       recordAiUsage(1);
-      // Atmosphere may cost an extra image call when enabled
       if (data.atmosphere?.dataUrl) {
-        setAtmosphereDataUrl(data.atmosphere.dataUrl as string);
+        const url = data.atmosphere.dataUrl as string;
+        setCachedAtmosphere(mission.locationId, url);
+        setAtmosphereDataUrl(url);
         recordAiUsage(1);
+      } else if (cachedArt) {
+        setAtmosphereDataUrl(cachedArt);
       } else {
         setAtmosphereDataUrl(null);
       }
@@ -500,6 +523,7 @@ export function MissionPlayer({ missionId }: { missionId: string }) {
           setIncludeAtmosphere(v);
           saveComicAtmospherePref(v);
         }}
+        atmosphereCached={!!getCachedAtmosphere(mission.locationId)}
         locked={locked}
         lockHint={mission.unlockHint}
       />
