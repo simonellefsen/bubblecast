@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { HomeScreenModalHost } from "@/components/HomeScreenModalHost";
+import { ServiceWorkerRegister } from "@/components/ServiceWorkerRegister";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -74,6 +75,7 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col font-sans">
         <ErrorBoundary>{children}</ErrorBoundary>
         <HomeScreenModalHost />
+        <ServiceWorkerRegister />
       </body>
     </html>
   );

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 
 export function NetworkBanner() {
@@ -24,8 +25,12 @@ export function NetworkBanner() {
       role="status"
       className="border-b border-amber-300 bg-amber-100 px-4 py-2 text-center text-sm text-amber-950"
     >
-      You’re offline. Mission briefs can run Offline cast (scripted NPCs + local
-      score); free phrase drill and journal still work.
+      You’re offline.{" "}
+      <Link href="/offline" className="font-semibold underline">
+        Offline tips
+      </Link>
+      {" · "}
+      Offline cast, free drill, and journal still work on cached pages.
     </div>
   );
 }

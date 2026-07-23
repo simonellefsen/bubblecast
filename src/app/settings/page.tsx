@@ -50,6 +50,8 @@ export default function SettingsPage() {
   const [authInfo, setAuthInfo] = useState<AuthInfo | null>(null);
   const [streak, setStreak] = useState(0);
   const [aiUsage, setAiUsage] = useState(0);
+  const [swStatus, setSwStatus] = useState<string>("…");
+  const [shellNote, setShellNote] = useState<string | null>(null);
   const supabaseOn = isSupabaseConfigured();
 
   async function refreshProfile() {
@@ -78,6 +80,16 @@ export default function SettingsPage() {
     setStreak(loadStreak().count);
     setAiUsage(loadUsage().count);
     setComicAtmosphere(loadComicAtmospherePref());
+    if (typeof navigator !== "undefined" && "serviceWorker" in navigator) {
+      navigator.serviceWorker.getRegistration().then((reg) => {
+        if (!reg) setSwStatus("not registered");
+        else if (reg.active) setSwStatus("active (offline shell)");
+        else if (reg.installing) setSwStatus("installing…");
+        else setSwStatus("registered");
+      });
+    } else {
+      setSwStatus("unsupported");
+    }
     fetch("/api/health")
       .then((r) => r.json())
       .then(setHealth)
@@ -479,6 +491,49 @@ export default function SettingsPage() {
           >
             How to add to home screen
           </button>
+        </section>
+
+        <section className="rounded-2xl border bg-white p-4 shadow-sm">
+          <h2 className="font-semibold">Offline shell</h2>
+          <p className="mt-1 text-sm text-slate-600">
+            Production installs a service worker that caches the app shell so city map,
+            journal, and offline cast stay reachable without a connection.
+          </p>
+          <dl className="mt-3 space-y-1 text-sm">
+            <div className="flex justify-between gap-3">
+              <dt className="text-slate-500">Service worker</dt>
+              <dd className="text-slate-700">{swStatus}</dd>
+            </div>
+          </dl>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button
+              type="button"
+              className="rounded-full border bg-white px-4 py-2 text-sm font-medium text-slate-800 hover:bg-slate-50"
+              onClick={() => {
+                const sw = navigator.serviceWorker?.controller;
+                if (!sw) {
+                  setShellNote(
+                    "No active worker yet — open the live site once online, or set localStorage bubblecast-sw-dev=1 for local testing.",
+                  );
+                  return;
+                }
+                sw.postMessage({ type: "WARM_SHELL" });
+                setShellNote("Warming shell cache (map, journal, café)…");
+                setTimeout(() => setShellNote("Shell warm requested"), 800);
+              }}
+            >
+              Warm offline cache
+            </button>
+            <a
+              href="/offline"
+              className="rounded-full border bg-white px-4 py-2 text-sm font-medium text-slate-800 hover:bg-slate-50"
+            >
+              Offline tips page
+            </a>
+          </div>
+          {shellNote ? (
+            <p className="mt-2 text-xs text-slate-500">{shellNote}</p>
+          ) : null}
         </section>
       </div>
     </AppShell>

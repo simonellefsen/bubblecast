@@ -27,5 +27,9 @@ export default function manifest(): MetadataRoute.Manifest {
     ],
     categories: ["education", "entertainment"],
     lang: "en",
+    // Prefer offline-capable shell after first visit
+    id: "/",
+    dir: "ltr",
+    prefer_related_applications: false,
   };
 }

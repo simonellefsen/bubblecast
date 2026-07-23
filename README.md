@@ -56,6 +56,8 @@ Default pair: **English → Spanish**, CEFR A1–B1.
 - **Scene CEFR control**: Easier / Match / Stretch on mission brief (profile unchanged); mid-mission soft adapt once if you’re stuck in English or flying in Spanish  
 - **Offline cast**: full scripted live turns (keyword/phrase matching), local hints + debrief scoring when offline, budget-empty, or AI fails mid-scene  
 - **Mission offline scripts**: every Harborline mission has cast-specific NPC lines per goal; live UI flashes when beats complete  
+- **PWA offline shell**: production service worker caches shell routes + static assets; `/offline` tips page; Settings can warm cache  
+
 
 
 
