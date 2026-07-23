@@ -41,6 +41,10 @@ import {
   directorUserPrompt,
 } from "./prompts";
 import type { z } from "zod";
+import {
+  applyMidMissionCefr,
+  evaluateMidMissionCefr,
+} from "@/lib/cefr-adapt";
 
 type NpcResponse = z.infer<typeof npcResponseSchema>;
 
@@ -246,6 +250,7 @@ export async function startScene(opts: {
     locationId: mission.locationId,
     castIds: mission.castIds,
     cefr: opts.learner.cefr,
+    cefrBaseline: opts.learner.cefr,
     status: wantComic && comic ? "comic" : "live",
     beats: plan.beats,
     turns,
@@ -332,6 +337,12 @@ export function applyNpcResponse(
   }
 
   next.updatedAt = new Date().toISOString();
+
+  // Soft mid-mission CEFR adapt (scene-only, at most once)
+  const adapt = evaluateMidMissionCefr(next);
+  if (adapt) {
+    return applyMidMissionCefr(next, adapt);
+  }
   return next;
 }
 

@@ -24,8 +24,8 @@ export function NetworkBanner() {
       role="status"
       className="border-b border-amber-300 bg-amber-100 px-4 py-2 text-center text-sm text-amber-950"
     >
-      You’re offline. Live scenes need a connection; journal practice still works
-      from saved words.
+      You’re offline. AI cast needs a connection — use Offline warmup on a mission
+      brief, free phrase drill, or journal practice.
     </div>
   );
 }

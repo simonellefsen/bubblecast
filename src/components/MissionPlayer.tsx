@@ -40,10 +40,15 @@ import {
   setCachedAtmosphere,
 } from "@/lib/atmosphere-cache";
 import {
+  resolveSceneCefr,
+  type SceneDifficultyPref,
+} from "@/lib/cefr-adapt";
+import {
   loadComicAtmospherePref,
   saveComicAtmospherePref,
   shouldRequestAtmosphere,
 } from "@/lib/prefs";
+import { buildOfflineSession } from "@/lib/session/offline-start";
 import { checkAiBudget, DAILY_AI_SOFT_CAP, loadUsage, recordAiUsage } from "@/lib/usage";
 import { AchievementsPanel } from "./AchievementsPanel";
 import { CharacterAvatar } from "./CharacterAvatar";
@@ -75,6 +80,8 @@ export function MissionPlayer({ missionId }: { missionId: string }) {
   const [streaming, setStreaming] = useState(false);
   const [includeComic, setIncludeComic] = useState(true);
   const [includeAtmosphere, setIncludeAtmosphere] = useState(true);
+  const [difficultyPref, setDifficultyPref] =
+    useState<SceneDifficultyPref>("match");
   const [loadingStep, setLoadingStep] = useState("Checking traveler profile…");
   const [unlockedNow, setUnlockedNow] = useState<MissionTemplate[]>([]);
   const [streakCount, setStreakCount] = useState(0);
@@ -141,10 +148,54 @@ export function MissionPlayer({ missionId }: { missionId: string }) {
     };
   }, [missionId]);
 
+  function sceneCefrForStart() {
+    if (!learner) return "A1" as const;
+    return resolveSceneCefr(learner.cefr, mission.difficulty, difficultyPref);
+  }
+
+  function startOfflineFromBrief() {
+    if (!learner || busy) return;
+    if (!isMissionUnlocked(missionId, learner.completedMissionIds)) {
+      setError(mission.unlockHint ?? "Mission locked");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const learnerContext = buildSceneLearnerContext(learner, mission.castIds);
+      const sceneCefr = sceneCefrForStart();
+      const offline = buildOfflineSession({
+        missionId,
+        cefr: sceneCefr,
+        includeComic,
+        learnerContext,
+        displayName: learner.displayName,
+      });
+      // Prefer cached atmosphere even offline (no new Imagine call)
+      if (includeComic && includeAtmosphere) {
+        const cached = getCachedAtmosphere(mission.locationId);
+        setAtmosphereDataUrl(cached);
+      } else {
+        setAtmosphereDataUrl(null);
+      }
+      const nextPhase = offline.comic ? "comic" : "live";
+      commitSession(offline, nextPhase);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Offline start failed");
+      setPhase("error");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function startFromBrief() {
     if (!learner || busy) return;
     if (!isMissionUnlocked(missionId, learner.completedMissionIds)) {
       setError(mission.unlockHint ?? "Mission locked");
+      return;
+    }
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      startOfflineFromBrief();
       return;
     }
     const remaining = Math.max(0, DAILY_AI_SOFT_CAP - loadUsage().count);
@@ -169,6 +220,7 @@ export function MissionPlayer({ missionId }: { missionId: string }) {
     setBusy(true);
     setPhase("loading");
     setError(null);
+    const sceneCefr = sceneCefrForStart();
     try {
       setLoadingStep(
         cachedArt
@@ -188,7 +240,7 @@ export function MissionPlayer({ missionId }: { missionId: string }) {
         body: JSON.stringify({
           missionId,
           learner: {
-            cefr: learner.cefr,
+            cefr: sceneCefr,
             displayName: learner.displayName,
           },
           includeComic,
@@ -210,8 +262,14 @@ export function MissionPlayer({ missionId }: { missionId: string }) {
         setAtmosphereDataUrl(null);
       }
       setLoadingStep("Setting the stage…");
-      const nextPhase = data.session.comic ? "comic" : "live";
-      commitSession(data.session, nextPhase);
+      // Ensure baseline is set for mid-mission adapt
+      const sessionWithBaseline = {
+        ...data.session,
+        cefr: data.session.cefr ?? sceneCefr,
+        cefrBaseline: data.session.cefrBaseline ?? sceneCefr,
+      };
+      const nextPhase = sessionWithBaseline.comic ? "comic" : "live";
+      commitSession(sessionWithBaseline, nextPhase);
       const after = loadUsage().count;
       if (after >= DAILY_AI_SOFT_CAP * 0.8) {
         const left = Math.max(0, DAILY_AI_SOFT_CAP - after);
@@ -304,6 +362,12 @@ export function MissionPlayer({ missionId }: { missionId: string }) {
   async function sendTurn(e?: React.FormEvent) {
     e?.preventDefault();
     if (!session || !input.trim() || busy) return;
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      setError(
+        "You’re offline — AI cast can’t reply. Use Offline warmup phrases or free drill, then reconnect.",
+      );
+      return;
+    }
     const budget = checkAiBudget(1);
     if (!budget.ok) {
       setError(budget.message);
@@ -523,6 +587,7 @@ export function MissionPlayer({ missionId }: { missionId: string }) {
         learner={learner}
         busy={busy}
         onStart={() => void startFromBrief()}
+        onStartOffline={() => startOfflineFromBrief()}
         includeComic={includeComic}
         onIncludeComicChange={setIncludeComic}
         includeAtmosphere={includeAtmosphere}
@@ -531,6 +596,8 @@ export function MissionPlayer({ missionId }: { missionId: string }) {
           saveComicAtmospherePref(v);
         }}
         atmosphereCached={!!getCachedAtmosphere(mission.locationId)}
+        difficultyPref={difficultyPref}
+        onDifficultyPrefChange={setDifficultyPref}
         locked={locked}
         lockHint={mission.unlockHint}
       />
@@ -592,7 +659,9 @@ export function MissionPlayer({ missionId }: { missionId: string }) {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-sm text-slate-500">
-            {location.emoji} {location.name} · {mission.difficulty}
+            {location.emoji} {location.name} · mission {mission.difficulty}
+            {session ? ` · scene CEFR ${session.cefr}` : ""}
+            {session?.cefrAdapted ? " · adapted" : ""}
           </p>
           <h1 className="text-2xl font-semibold tracking-tight">{mission.title}</h1>
           <p className="text-sm text-slate-600">{mission.learnerGoal}</p>

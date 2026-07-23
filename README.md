@@ -53,6 +53,9 @@ Default pair: **English → Spanish**, CEFR A1–B1.
 - **Cast memory depth**: bond tiers + up to 3 debrief memories per character flow into comic/director/actor prompts; Cast page shows stamps  
 - **Daily challenge**: deterministic unlocked mission of the day on the city map  
 - **Local debrief log**: device history always (cloud when available)  
+- **Scene CEFR control**: Easier / Match / Stretch on mission brief (profile unchanged); mid-mission soft adapt once if you’re stuck in English or flying in Spanish  
+- **Offline warmup**: local comic + beats with no AI when offline or budget empty; free drill still available  
+
 
 
 

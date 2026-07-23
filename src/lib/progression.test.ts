@@ -19,6 +19,13 @@ import {
   bondTier,
   parseMemoryNotes,
 } from "@/lib/cast-memory";
+import {
+  evaluateMidMissionCefr,
+  looksCapableSpanish,
+  looksPrimarilyEnglish,
+  resolveSceneCefr,
+  stepCefr,
+} from "@/lib/cefr-adapt";
 import { dayKey, getDailyChallenge, hashDayKey } from "@/lib/daily-challenge";
 import { formatDebriefPostcard } from "@/lib/debrief-postcard";
 import { buildSceneLearnerContext } from "@/lib/learner-context";
@@ -28,8 +35,9 @@ import {
   phraseAnswersMatch,
 } from "@/lib/phrase-bank";
 import { shouldRequestAtmosphere } from "@/lib/prefs";
+import { buildOfflineSession } from "@/lib/session/offline-start";
 import { createDefaultLearner } from "@/lib/session/store";
-import type { DebriefPacket, VocabEntry } from "@/content/types";
+import type { DebriefPacket, SceneSession, VocabEntry } from "@/content/types";
 
 function debrief(partial: Partial<DebriefPacket>): DebriefPacket {
   return {
@@ -292,5 +300,87 @@ describe("daily challenge", () => {
     const c = getDailyChallenge(["cafe-breakfast"], new Date("2026-07-23T12:00:00"));
     assert.equal(c.kind, "new");
     assert.notEqual(c.mission.id, "cafe-breakfast");
+  });
+});
+
+describe("cefr scene adapt", () => {
+  it("steps and resolves scene CEFR prefs", () => {
+    assert.equal(stepCefr("A1", 1), "A2");
+    assert.equal(stepCefr("A1", -1), "A1");
+    assert.equal(resolveSceneCefr("A2", "A1", "easier"), "A1");
+    assert.equal(resolveSceneCefr("A1", "B1", "stretch"), "A2");
+    assert.equal(resolveSceneCefr("A2", "A2", "match"), "A2");
+  });
+
+  it("detects english vs spanish learner text", () => {
+    assert.equal(looksPrimarilyEnglish("I want coffee please"), true);
+    assert.equal(looksPrimarilyEnglish("Quisiera un café, por favor"), false);
+    assert.equal(looksCapableSpanish("Quisiera un café"), true);
+  });
+
+  it("eases CEFR after english-heavy turns", () => {
+    const session: SceneSession = {
+      id: "t",
+      missionId: "cafe-breakfast",
+      locationId: "mercado-cafe",
+      castIds: ["mira"],
+      cefr: "A2",
+      cefrBaseline: "A2",
+      status: "live",
+      beats: [
+        { id: "a", goal: "x", hintSoft: "", hintPhrase: "", hintFull: "", completed: false },
+        { id: "b", goal: "y", hintSoft: "", hintPhrase: "", hintFull: "", completed: false },
+      ],
+      turns: [
+        { role: "learner", text: "I want coffee please", at: "1" },
+        { role: "npc", text: "Claro", at: "2" },
+        { role: "learner", text: "How much is it?", at: "3" },
+      ],
+      turnCount: 2,
+      maxTurns: 10,
+      createdAt: "1",
+      updatedAt: "1",
+    };
+    const adapt = evaluateMidMissionCefr(session);
+    assert.ok(adapt);
+    assert.equal(adapt!.direction, "down");
+    assert.equal(adapt!.cefr, "A1");
+  });
+
+  it("does not adapt twice", () => {
+    const session: SceneSession = {
+      id: "t",
+      missionId: "cafe-breakfast",
+      locationId: "mercado-cafe",
+      castIds: ["mira"],
+      cefr: "A1",
+      cefrBaseline: "A2",
+      cefrAdapted: true,
+      status: "live",
+      beats: [],
+      turns: [
+        { role: "learner", text: "hello please coffee", at: "1" },
+        { role: "learner", text: "thank you very much", at: "2" },
+      ],
+      turnCount: 3,
+      maxTurns: 10,
+      createdAt: "1",
+      updatedAt: "1",
+    };
+    assert.equal(evaluateMidMissionCefr(session), null);
+  });
+});
+
+describe("offline session", () => {
+  it("builds comic + beats without network", () => {
+    const s = buildOfflineSession({
+      missionId: "cafe-breakfast",
+      cefr: "A1",
+      includeComic: true,
+    });
+    assert.equal(s.status, "comic");
+    assert.ok(s.comic?.panels.length);
+    assert.ok(s.beats.length >= 1);
+    assert.equal(s.cefrBaseline, "A1");
   });
 });

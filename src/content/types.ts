@@ -190,6 +190,10 @@ export interface SceneSession {
   locationId: LocationId;
   castIds: CharacterId[];
   cefr: CefrLevel;
+  /** CEFR when the scene started (for mid-mission soft adapt bounds). */
+  cefrBaseline?: CefrLevel;
+  /** True after at most one mid-mission CEFR soft adapt. */
+  cefrAdapted?: boolean;
   status: "comic" | "live" | "ended";
   beats: SceneBeat[];
   turns: SceneTurn[];
