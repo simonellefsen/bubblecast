@@ -54,7 +54,13 @@ import {
 } from "@/lib/session/offline-play";
 import { buildOfflineSession } from "@/lib/session/offline-start";
 import { createDefaultLearner } from "@/lib/session/store";
+import {
+  buildWeeklyRecap,
+  formatWeeklyRecapPostcard,
+  startOfWeek,
+} from "@/lib/weekly-recap";
 import type { DebriefPacket, SceneSession, VocabEntry } from "@/content/types";
+import type { LocalDebriefRun } from "@/lib/local-debrief-log";
 
 function debrief(partial: Partial<DebriefPacket>): DebriefPacket {
   return {
@@ -475,5 +481,79 @@ describe("cast portrait cache", () => {
   it("gates portrait requests on budget", () => {
     assert.equal(shouldRequestPortrait(1), false);
     assert.equal(shouldRequestPortrait(2), true);
+  });
+});
+
+describe("weekly recap", () => {
+  it("aggregates debriefs in the current week", () => {
+    const now = new Date("2026-07-23T15:00:00"); // Thursday
+    const weekStart = startOfWeek(now);
+    assert.equal(weekStart.getDay(), 1); // Monday
+
+    const learner = createDefaultLearner();
+    learner.xp = 120;
+    learner.relationships = learner.relationships.map((r) =>
+      r.characterId === "mira" ? { ...r, score: 55 } : r,
+    );
+    learner.vocab = [
+      {
+        word: "café",
+        gloss: "coffee",
+        status: "fuzzy",
+        timesSeen: 2,
+        lastSeenAt: "2026-07-22T10:00:00.000Z",
+      },
+    ];
+
+    const debriefs: LocalDebriefRun[] = [
+      {
+        id: "1",
+        mission_id: "cafe-breakfast",
+        outcome: "success",
+        score: 88,
+        summary: "ok",
+        xp_earned: 40,
+        created_at: "2026-07-21T12:00:00.000Z",
+      },
+      {
+        id: "2",
+        mission_id: "cafe-breakfast",
+        outcome: "partial",
+        score: 50,
+        summary: "meh",
+        xp_earned: 20,
+        created_at: "2026-07-22T12:00:00.000Z",
+      },
+      {
+        id: "old",
+        mission_id: "cafe-breakfast",
+        outcome: "success",
+        score: 99,
+        summary: "old",
+        xp_earned: 40,
+        created_at: "2026-07-01T12:00:00.000Z",
+      },
+    ];
+
+    const recap = buildWeeklyRecap({ learner, debriefs, now });
+    assert.equal(recap.debriefCount, 2);
+    assert.equal(recap.successCount, 1);
+    assert.equal(recap.partialCount, 1);
+    assert.equal(recap.xpEarned, 60);
+    assert.equal(recap.bestScore, 88);
+    assert.equal(recap.uniqueMissions, 1);
+    assert.equal(recap.vocabTouched, 1);
+    assert.equal(recap.topBondName, "Mira");
+    assert.match(formatWeeklyRecapPostcard(recap, "Traveler"), /weekly recap/);
+  });
+
+  it("handles empty week", () => {
+    const recap = buildWeeklyRecap({
+      learner: createDefaultLearner(),
+      debriefs: [],
+      now: new Date("2026-07-23T12:00:00"),
+    });
+    assert.equal(recap.debriefCount, 0);
+    assert.match(recap.headline, /Quiet/i);
   });
 });

@@ -14,6 +14,7 @@ import { DueVocabBanner } from "./DueVocabBanner";
 import { FreePracticeCard } from "./FreePracticeCard";
 import { OnboardingCard } from "./OnboardingCard";
 import { UpNextCard } from "./UpNextCard";
+import { WeeklyRecapCard } from "./WeeklyRecapCard";
 
 export function CityMap({ learner }: { learner: LearnerProfile }) {
   const completed = learner.completedMissionIds;
@@ -52,6 +53,10 @@ export function CityMap({ learner }: { learner: LearnerProfile }) {
       <DueVocabBanner learner={learner} />
 
       <DailyChallengeCard learner={learner} />
+
+      {completed.length > 0 || learner.xp > 0 ? (
+        <WeeklyRecapCard learner={learner} />
+      ) : null}
 
       <FreePracticeCard />
 

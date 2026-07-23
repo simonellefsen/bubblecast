@@ -5,6 +5,7 @@ import { AppShell } from "@/components/AppShell";
 import { MissionHistory } from "@/components/MissionHistory";
 import { PhraseDrill } from "@/components/PhraseDrill";
 import { VocabPractice } from "@/components/VocabPractice";
+import { WeeklyRecapCard } from "@/components/WeeklyRecapCard";
 import type { LearnerProfile } from "@/content/types";
 import { hydrateLearner } from "@/lib/learner-client";
 import { harborline } from "@/content/harborline/world";
@@ -47,6 +48,8 @@ export default function JournalPage() {
             <Stat label="Words" value={String(learner.vocab.length)} />
             <Stat label="Due today" value={String(countDueVocab(learner.vocab))} />
           </div>
+
+          <WeeklyRecapCard learner={learner} />
 
           <VocabPractice learner={learner} onUpdate={setLearner} />
 

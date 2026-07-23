@@ -58,6 +58,8 @@ Default pair: **English → Spanish**, CEFR A1–B1.
 - **Mission offline scripts**: every Harborline mission has cast-specific NPC lines per goal; live UI flashes when beats complete  
 - **PWA offline shell**: production service worker caches shell routes + static assets; `/offline` tips page; Settings can warm cache; update toast when a new SW is waiting  
 - **Imagine cast portraits**: optional per-character art on Cast page (session cache; kill-switch `XAI_CAST_PORTRAITS=0`); emoji fallback elsewhere until cached  
+- **Weekly traveler recap**: Mon–Sun stats from local debriefs (scenes, XP, best run, vocab, achievements) on city map + journal; share postcard  
+
 
 
 
