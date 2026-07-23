@@ -812,6 +812,7 @@ export function MissionPlayer({ missionId }: { missionId: string }) {
         <DebriefView
           debrief={debrief}
           missionTitle={mission.title}
+          locationLabel={`${location.emoji} ${location.name}`}
           unlocked={unlockedNow}
           streakCount={streakCount}
           cefrNudge={cefrNudge}
@@ -879,6 +880,7 @@ function TargetPhrases({
 function DebriefView({
   debrief,
   missionTitle,
+  locationLabel,
   unlocked,
   streakCount,
   cefrNudge,
@@ -888,6 +890,7 @@ function DebriefView({
 }: {
   debrief: DebriefPacket;
   missionTitle: string;
+  locationLabel: string;
   unlocked: MissionTemplate[];
   streakCount: number;
   cefrNudge: CefrNudge | null;
@@ -895,6 +898,7 @@ function DebriefView({
   onApplyCefr: (level: CefrLevel) => void;
   newAchievements: Achievement[];
 }) {
+  const [shareNote, setShareNote] = useState<string | null>(null);
   const tone =
     debrief.outcome === "success"
       ? "border-emerald-200 bg-emerald-50"
@@ -902,11 +906,53 @@ function DebriefView({
         ? "border-amber-200 bg-amber-50"
         : "border-slate-200 bg-slate-50";
 
+  async function sharePostcard() {
+    const { formatDebriefPostcard, shareDebriefPostcard } = await import(
+      "@/lib/debrief-postcard"
+    );
+    const text = formatDebriefPostcard({
+      missionTitle,
+      locationLabel,
+      debrief,
+      streakCount,
+      siteUrl:
+        typeof window !== "undefined"
+          ? window.location.origin
+          : "https://bubblecast.vercel.app",
+    });
+    const result = await shareDebriefPostcard(text, `Bubblecast · ${missionTitle}`);
+    if (result === "shared") setShareNote("Shared");
+    else if (result === "copied") setShareNote("Postcard copied");
+    else setShareNote("Couldn’t share — try copy");
+    setTimeout(() => setShareNote(null), 2000);
+  }
+
+  async function copyPostcard() {
+    const { formatDebriefPostcard } = await import("@/lib/debrief-postcard");
+    const text = formatDebriefPostcard({
+      missionTitle,
+      locationLabel,
+      debrief,
+      streakCount,
+      siteUrl:
+        typeof window !== "undefined"
+          ? window.location.origin
+          : "https://bubblecast.vercel.app",
+    });
+    try {
+      await navigator.clipboard.writeText(text);
+      setShareNote("Postcard copied");
+    } catch {
+      setShareNote("Copy failed");
+    }
+    setTimeout(() => setShareNote(null), 2000);
+  }
+
   return (
     <div className="space-y-4">
       <div className={`rounded-3xl border p-6 ${tone}`}>
         <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-          Debrief · {missionTitle}
+          Debrief · {locationLabel} · {missionTitle}
         </p>
         <h2 className="mt-1 text-2xl font-semibold capitalize">
           {debrief.outcome} · {debrief.score}/100 · +{debrief.xpEarned} XP
@@ -918,30 +964,25 @@ function DebriefView({
             🔥 {streakCount}-day streak
           </p>
         ) : null}
-        <button
-          type="button"
-          className="mt-4 rounded-full border border-slate-300 bg-white/80 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-white"
-          onClick={async () => {
-            const text = [
-              `Bubblecast · ${missionTitle}`,
-              `${debrief.outcome} · ${debrief.score}/100 · +${debrief.xpEarned} XP`,
-              debrief.summary,
-              debrief.castReaction,
-              debrief.newWords.length
-                ? `Words: ${debrief.newWords.map((w) => w.word).join(", ")}`
-                : "",
-            ]
-              .filter(Boolean)
-              .join("\n");
-            try {
-              await navigator.clipboard.writeText(text);
-            } catch {
-              /* ignore */
-            }
-          }}
-        >
-          Copy summary
-        </button>
+        <div className="mt-4 flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            className="rounded-full border border-slate-300 bg-white/80 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-white"
+            onClick={() => void sharePostcard()}
+          >
+            Share postcard
+          </button>
+          <button
+            type="button"
+            className="rounded-full border border-slate-300 bg-white/80 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-white"
+            onClick={() => void copyPostcard()}
+          >
+            Copy postcard
+          </button>
+          {shareNote ? (
+            <span className="text-xs font-medium text-emerald-700">{shareNote}</span>
+          ) : null}
+        </div>
       </div>
 
       {cefrNudge && cefrNudge.direction !== "stay" ? (
@@ -1064,6 +1105,12 @@ function DebriefView({
           className="rounded-full bg-orange-500 px-5 py-2.5 text-sm font-semibold text-white"
         >
           Back to city
+        </Link>
+        <Link
+          href="/journal#phrase-drill"
+          className="rounded-full border bg-white px-5 py-2.5 text-sm text-slate-700"
+        >
+          Free phrase drill
         </Link>
         <Link
           href="/journal"

@@ -48,6 +48,9 @@ Default pair: **English → Spanish**, CEFR A1–B1.
 - **Account linking**: link email to anonymous user (same id / progress) or magic-link sign-in on another device  
 - **Optional Imagine atmosphere** on comic warmups (mission brief + Settings toggle; server kill-switch `XAI_COMIC_ATMOSPHERE=0`); skipped when AI budget is low; not stored in turn payloads  
 - **Location atmosphere cache**: Imagine art is reused per location (session memory) so replays skip the image call; comics use it as panel backdrops  
+- **Debrief postcard**: share or copy a formatted mission summary (Web Share + clipboard)  
+- **Free phrase drill** (Journal + city map): English cue → Spanish MCQ, no AI budget; keeps streak when soft cap is low  
+
 
 
 

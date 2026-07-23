@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { AppShell } from "@/components/AppShell";
 import { MissionHistory } from "@/components/MissionHistory";
+import { PhraseDrill } from "@/components/PhraseDrill";
 import { VocabPractice } from "@/components/VocabPractice";
 import type { LearnerProfile } from "@/content/types";
 import { hydrateLearner } from "@/lib/learner-client";
@@ -48,6 +49,10 @@ export default function JournalPage() {
           </div>
 
           <VocabPractice learner={learner} onUpdate={setLearner} />
+
+          <section id="phrase-drill" className="scroll-mt-24">
+            <PhraseDrill completedMissionIds={learner.completedMissionIds} />
+          </section>
 
           <section className="rounded-2xl border bg-white p-4 shadow-sm">
             <h2 className="font-semibold">Recent debriefs</h2>

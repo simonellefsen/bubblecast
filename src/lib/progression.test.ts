@@ -13,6 +13,12 @@ import {
   hasCachedAtmosphere,
   setCachedAtmosphere,
 } from "@/lib/atmosphere-cache";
+import { formatDebriefPostcard } from "@/lib/debrief-postcard";
+import {
+  buildDrillItems,
+  buildPhraseBank,
+  phraseAnswersMatch,
+} from "@/lib/phrase-bank";
 import { shouldRequestAtmosphere } from "@/lib/prefs";
 import type { DebriefPacket, VocabEntry } from "@/content/types";
 
@@ -163,5 +169,62 @@ describe("atmosphere location cache", () => {
     clearCachedAtmosphere("hotel-bruma");
     setCachedAtmosphere("hotel-bruma", "https://example.com/x.png");
     assert.equal(getCachedAtmosphere("hotel-bruma"), null);
+  });
+});
+
+describe("debrief postcard", () => {
+  it("formats a shareable summary", () => {
+    const text = formatDebriefPostcard({
+      missionTitle: "Order breakfast",
+      locationLabel: "☕ Mercado Café",
+      streakCount: 3,
+      debrief: debrief({
+        outcome: "success",
+        score: 90,
+        summary: "You got the coffee.",
+        castReaction: "Mira smiles.",
+        xpEarned: 40,
+        newWords: [{ word: "café", gloss: "coffee" }],
+        criteriaResults: [
+          { id: "order", met: true, note: "ok" },
+          { id: "price", met: false, note: "skipped" },
+        ],
+      }),
+      siteUrl: "https://bubblecast.vercel.app",
+    });
+    assert.match(text, /Bubblecast postcard/);
+    assert.match(text, /Order breakfast/);
+    assert.match(text, /SUCCESS · 90\/100 · \+40 XP/);
+    assert.match(text, /3-day streak/);
+    assert.match(text, /café \(coffee\)/);
+    assert.match(text, /Goals: 1\/2/);
+  });
+});
+
+describe("phrase bank drill", () => {
+  it("builds cards from Harborline missions", () => {
+    const bank = buildPhraseBank();
+    assert.ok(bank.length >= 4);
+    assert.ok(bank.some((c) => c.spanish.includes("café") || c.spanish.includes("Buenos")));
+  });
+
+  it("scopes to mission ids", () => {
+    const bank = buildPhraseBank({ missionIds: ["cafe-breakfast"] });
+    assert.ok(bank.every((c) => c.missionId === "cafe-breakfast"));
+    assert.ok(bank.length >= 3);
+  });
+
+  it("builds MCQ items with correct option present", () => {
+    const items = buildDrillItems(buildPhraseBank({ missionIds: ["cafe-breakfast"] }), 4);
+    assert.ok(items.length >= 1);
+    for (const item of items) {
+      assert.equal(item.options[item.correctIndex], item.card.spanish);
+      assert.ok(item.options.length >= 2 && item.options.length <= 4);
+    }
+  });
+
+  it("normalizes phrase answers for fuzzy match", () => {
+    assert.equal(phraseAnswersMatch("¿Cuánto cuesta?", "cuanto cuesta"), true);
+    assert.equal(phraseAnswersMatch("Gracias", "Por favor"), false);
   });
 });
