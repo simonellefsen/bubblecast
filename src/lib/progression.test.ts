@@ -35,16 +35,18 @@ import {
   phraseAnswersMatch,
 } from "@/lib/phrase-bank";
 import { shouldRequestAtmosphere } from "@/lib/prefs";
+import { getOfflineScript } from "@/content/harborline/offline-scripts";
+import { getMission, harborline } from "@/content/harborline/world";
 import {
   matchBeatsFromText,
   offlineDebrief,
   offlineLearnerTurn,
+  offlineLearnerTurnDetailed,
   textHitsPhrase,
 } from "@/lib/session/offline-play";
 import { buildOfflineSession } from "@/lib/session/offline-start";
 import { createDefaultLearner } from "@/lib/session/store";
 import type { DebriefPacket, SceneSession, VocabEntry } from "@/content/types";
-import { getMission } from "@/content/harborline/world";
 
 function debrief(partial: Partial<DebriefPacket>): DebriefPacket {
   return {
@@ -420,5 +422,35 @@ describe("offline session", () => {
     assert.ok(d.score >= 40);
     assert.ok(d.xpEarned > 0);
     assert.ok(["success", "partial"].includes(d.outcome));
+  });
+
+  it("uses mission-specific NPC lines on criterion hits", () => {
+    const s0 = buildOfflineSession({
+      missionId: "cafe-breakfast",
+      cefr: "A1",
+      includeComic: false,
+    });
+    const { session: s1, newlyCompleted } = offlineLearnerTurnDetailed(
+      s0,
+      "Buenos días",
+    );
+    assert.ok(newlyCompleted.includes("greet"));
+    const npc = [...s1.turns].reverse().find((t) => t.role === "npc");
+    assert.ok(npc?.text.includes("gusto") || npc?.text.includes("Hola"));
+  });
+});
+
+describe("offline mission scripts", () => {
+  it("covers every Harborline mission", () => {
+    for (const m of harborline.missions) {
+      const script = getOfflineScript(m.id);
+      assert.ok(script, `missing offline script for ${m.id}`);
+      for (const c of m.successCriteria) {
+        assert.ok(
+          script!.onCriterion[c.id],
+          `missing onCriterion.${c.id} for ${m.id}`,
+        );
+      }
+    }
   });
 });

@@ -3,6 +3,10 @@ import {
   getCharacters,
   getMission,
 } from "@/content/harborline/world";
+import {
+  getOfflineScript,
+  type ScriptedLine,
+} from "@/content/harborline/offline-scripts";
 import type {
   CharacterId,
   DebriefPacket,
@@ -42,8 +46,8 @@ export function textHitsPhrase(learnerText: string, phrase: string): boolean {
   return hit >= Math.min(2, tb.length) || (tb.length === 1 && hit === 1);
 }
 
-/** Extra English/Spanish keywords per criterion id patterns. */
-const CRITERION_KEYWORDS: Record<string, string[]> = {
+/** Extra English/Spanish keywords per criterion id (all Harborline missions). */
+export const CRITERION_KEYWORDS: Record<string, string[]> = {
   greet: ["hola", "buenos", "buenas", "dias", "tardes", "noches", "hello", "hi"],
   "order-drink": [
     "cafe",
@@ -75,19 +79,62 @@ const CRITERION_KEYWORDS: Record<string, string[]> = {
   "state-problem": ["frio", "cold", "problema", "mal", "wrong", "roto"],
   "request-fix": ["otro", "otra", "traer", "cambiar", "fresh", "replacement", "puede"],
   "ask-next": ["proximo", "proxima", "hora", "sale", "tren", "train", "when", "next"],
-  "get-info": ["retraso", "delay", "tarde", "horario", "schedule"],
-  relay: ["sofia", "decirle", "tell", "dice", "proximo"],
-  checkin: ["reserva", "reservation", "habitacion", "room", "nombre", "name"],
-  wifi: ["wifi", "contrasena", "password", "clave", "internet"],
-  request: ["quisiera", "necesito", "podria", "please", "por favor"],
-  reschedule: ["reagendar", "cambiar", "mañana", "tomorrow", "hora", "meeting"],
-  confirm: ["confirmo", "perfecto", "vale", "ok", "bien", "confirm"],
-  allergy: ["alergia", "allergy", "sin", "no puedo", "gluten", "mariscos"],
-  ask: ["tiene", "hay", "contiene", "does it"],
-  bargain: ["descuento", "menos", "barato", "price", "cuanto"],
-  "open-chat": ["hola", "que tal", "bonito", "noche", "ferry"],
-  opinion: ["me gusta", "bonito", "prefiero", "creo", "think"],
-  plan: ["mañana", "tonight", "esta noche", "puedo", "vamos", "plan"],
+  "get-info": ["retraso", "delay", "tarde", "horario", "schedule", "doce", "via"],
+  relay: ["sofia", "decirle", "tell", "dice", "proximo", "via"],
+  name: [
+    "reserva",
+    "reservation",
+    "nombre",
+    "name",
+    "me llamo",
+    "habitacion",
+    "room",
+  ],
+  wifi: ["wifi", "contrasena", "password", "clave", "internet", "red"],
+  "late-checkout": [
+    "late",
+    "checkout",
+    "salida",
+    "tarde",
+    "catorce",
+    "check-out",
+    "posible",
+  ],
+  soften: [
+    "podriamos",
+    "podria",
+    "mover",
+    "reunion",
+    "meeting",
+    "posible",
+    "disculpa",
+  ],
+  "propose-time": [
+    "jueves",
+    "thursday",
+    "manana",
+    "tomorrow",
+    "hora",
+    "once",
+    "martes",
+    "viernes",
+  ],
+  confirm: ["confirmo", "perfecto", "vale", "ok", "bien", "confirm", "queda"],
+  "state-allergy": [
+    "alergico",
+    "alergica",
+    "alergia",
+    "allergy",
+    "frutos",
+    "secos",
+    "nueces",
+    "nuts",
+  ],
+  "ask-safe": ["lleva", "nueces", "contiene", "tiene", "seguro", "safe", "sin"],
+  purchase: ["prefiero", "esto", "compro", "quiero", "take", "please", "por favor"],
+  "open-chat": ["hola", "que tal", "bonito", "noche", "ferry", "vienes", "a menudo"],
+  opinion: ["me gusta", "bonito", "prefiero", "creo", "think", "parece"],
+  plan: ["manana", "tonight", "esta noche", "puedo", "vamos", "plan", "no puedo"],
 };
 
 function criterionKeywordHit(criterionId: string, learnerNorm: string): boolean {
@@ -119,7 +166,6 @@ export function matchBeatsFromText(
       textHitsPhrase(learnerText, p),
     );
     const kw = criterionKeywordHit(c.id, norm);
-    // Description token overlap as soft fallback
     const descTokens = tokens(c.description);
     const learnerTokens = new Set(tokens(learnerText));
     const descHit =
@@ -133,7 +179,7 @@ export function matchBeatsFromText(
   return completed;
 }
 
-const NPC_ACK: { text: string; gloss: string; emotion: Emotion }[] = [
+const GENERIC_ACK: ScriptedLine[] = [
   {
     text: "Perfecto, te escucho.",
     gloss: "Perfect, I'm listening.",
@@ -149,14 +195,9 @@ const NPC_ACK: { text: string; gloss: string; emotion: Emotion }[] = [
     gloss: "Of course, no problem.",
     emotion: "happy",
   },
-  {
-    text: "Entendido. Seguimos.",
-    gloss: "Got it. Let's continue.",
-    emotion: "neutral",
-  },
 ];
 
-const NPC_NUDGE: { text: string; gloss: string; emotion: Emotion }[] = [
+const GENERIC_NUDGE: ScriptedLine[] = [
   {
     text: "¿Puedes decirlo en español? Usa una frase del panel.",
     gloss: "Can you say it in Spanish? Use a phrase from the panel.",
@@ -169,46 +210,119 @@ const NPC_NUDGE: { text: string; gloss: string; emotion: Emotion }[] = [
   },
 ];
 
-function pickNpcLine(
+function resolveSpeaker(
+  line: ScriptedLine,
+  castIds: CharacterId[],
+  fallback: CharacterId,
+): CharacterId {
+  if (line.speakerId && castIds.includes(line.speakerId)) {
+    return line.speakerId;
+  }
+  return fallback;
+}
+
+function pickScriptedReply(
   session: SceneSession,
   newlyCompleted: string[],
-): { text: string; gloss: string; emotion: Emotion } {
-  if (newlyCompleted.length > 0) {
-    return NPC_ACK[session.turnCount % NPC_ACK.length]!;
+): { line: ScriptedLine; speakerId: CharacterId; companion?: ScriptedLine } {
+  const script = getOfflineScript(session.missionId);
+  const fallback = (session.castIds[0] ?? "mira") as CharacterId;
+
+  if (script) {
+    // Prefer first newly completed criterion with a dedicated line
+    for (const id of newlyCompleted) {
+      const hit = script.onCriterion[id];
+      if (hit) {
+        return {
+          line: hit,
+          speakerId: resolveSpeaker(hit, session.castIds as CharacterId[], fallback),
+          companion:
+            newlyCompleted.length > 0 && session.castIds.length > 1
+              ? script.companion
+              : undefined,
+        };
+      }
+    }
+    if (newlyCompleted.length > 0 && script.onAnyProgress.length) {
+      const line =
+        script.onAnyProgress[session.turnCount % script.onAnyProgress.length]!;
+      return {
+        line,
+        speakerId: resolveSpeaker(line, session.castIds as CharacterId[], fallback),
+        companion: script.companion,
+      };
+    }
+    const line =
+      script.onMiss[session.turnCount % script.onMiss.length] ?? GENERIC_NUDGE[0]!;
+    return {
+      line,
+      speakerId: resolveSpeaker(line, session.castIds as CharacterId[], fallback),
+    };
   }
-  return NPC_NUDGE[session.turnCount % NPC_NUDGE.length]!;
+
+  if (newlyCompleted.length > 0) {
+    const line = GENERIC_ACK[session.turnCount % GENERIC_ACK.length]!;
+    return { line, speakerId: fallback };
+  }
+  const line = GENERIC_NUDGE[session.turnCount % GENERIC_NUDGE.length]!;
+  return { line, speakerId: fallback };
+}
+
+function pushNpc(
+  turns: SceneTurn[],
+  speakerId: CharacterId,
+  line: ScriptedLine,
+): SceneTurn[] {
+  return [
+    ...turns,
+    {
+      role: "npc",
+      speakerId,
+      text: line.text,
+      gloss: line.gloss,
+      emotion: line.emotion as Emotion,
+      at: nowIso(),
+    },
+  ];
 }
 
 /** Local enter-live (no network). */
 export function offlineBeginLive(session: SceneSession): SceneSession {
   const mission = getMission(session.missionId);
+  const script = getOfflineScript(session.missionId);
   const lead = getCharacter(session.castIds[0]!);
   const now = nowIso();
   const openingAlready = session.turns.some((t) => t.role === "npc");
 
-  const turns: SceneTurn[] = openingAlready
-    ? [...session.turns]
-    : [
-        ...session.turns,
-        {
-          role: "npc",
-          speakerId: lead.id,
-          text:
-            session.cefr === "A1"
-              ? "¡Hola! Bienvenido/a. ¿Qué deseas?"
-              : "¡Hola! Dime, ¿en qué te puedo ayudar?",
-          gloss: "Hi! Welcome. What would you like?",
-          emotion: "warm",
-          at: now,
-        },
-      ];
+  let turns: SceneTurn[] = [...session.turns];
+  if (!openingAlready) {
+    const opening = script?.opening ?? {
+      text:
+        session.cefr === "A1"
+          ? "¡Hola! Bienvenido/a. ¿Qué deseas?"
+          : "¡Hola! Dime, ¿en qué te puedo ayudar?",
+      gloss: "Hi! Welcome. What would you like?",
+      emotion: "warm" as Emotion,
+      speakerId: lead.id,
+    };
+    turns = pushNpc(
+      turns,
+      resolveSpeaker(opening, session.castIds as CharacterId[], lead.id),
+      opening,
+    );
+  }
 
   if (!turns.some((t) => t.text.includes("Offline"))) {
-    turns.push({
-      role: "system",
-      text: `Offline cast · ${mission.title}. Tap target phrases; End for a local score.`,
-      at: now,
-    });
+    turns = [
+      ...turns,
+      {
+        role: "system",
+        text: `Offline cast · ${mission.title}${
+          script ? " · mission script" : ""
+        }. Tap target phrases; End for a local score.`,
+        at: now,
+      },
+    ];
   }
 
   return {
@@ -220,13 +334,25 @@ export function offlineBeginLive(session: SceneSession): SceneSession {
   };
 }
 
+export type OfflineTurnResult = {
+  session: SceneSession;
+  /** Criterion ids newly completed this turn */
+  newlyCompleted: string[];
+};
+
 /** Scripted NPC turn from keyword / phrase matches. */
 export function offlineLearnerTurn(
   session: SceneSession,
   text: string,
 ): SceneSession {
+  return offlineLearnerTurnDetailed(session, text).session;
+}
+
+export function offlineLearnerTurnDetailed(
+  session: SceneSession,
+  text: string,
+): OfflineTurnResult {
   const mission = getMission(session.missionId);
-  const leadId = (session.castIds[0] ?? mission.castIds[0]) as CharacterId;
   const now = nowIso();
 
   let next: SceneSession = {
@@ -256,38 +382,22 @@ export function offlineLearnerTurn(
     };
   }
 
-  const line = pickNpcLine(next, newly);
+  const { line, speakerId, companion } = pickScriptedReply(next, newly);
   next = {
     ...next,
-    turns: [
-      ...next.turns,
-      {
-        role: "npc",
-        speakerId: leadId,
-        text: line.text,
-        gloss: line.gloss,
-        emotion: line.emotion,
-        at: nowIso(),
-      },
-    ],
+    turns: pushNpc(next.turns, speakerId, line),
   };
 
-  // Second cast member occasional echo on multi-cast missions
-  if (session.castIds.length > 1 && newly.length > 0 && next.turnCount % 2 === 0) {
-    const other = getCharacter(session.castIds[1]!);
+  if (
+    companion &&
+    newly.length > 0 &&
+    next.turnCount % 2 === 0 &&
+    companion.speakerId &&
+    session.castIds.includes(companion.speakerId)
+  ) {
     next = {
       ...next,
-      turns: [
-        ...next.turns,
-        {
-          role: "npc",
-          speakerId: other.id,
-          text: "¡Bien! Gracias por avisar.",
-          gloss: "Nice! Thanks for letting us know.",
-          emotion: "happy",
-          at: nowIso(),
-        },
-      ],
+      turns: pushNpc(next.turns, companion.speakerId, companion),
     };
   }
 
@@ -323,7 +433,7 @@ export function offlineLearnerTurn(
   }
 
   next.updatedAt = nowIso();
-  return next;
+  return { session: next, newlyCompleted: newly };
 }
 
 export function offlineHint(

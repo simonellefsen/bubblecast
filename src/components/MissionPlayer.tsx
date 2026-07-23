@@ -53,7 +53,7 @@ import {
   offlineBeginLive,
   offlineDebrief,
   offlineHint,
-  offlineLearnerTurn,
+  offlineLearnerTurnDetailed,
 } from "@/lib/session/offline-play";
 import { buildOfflineSession } from "@/lib/session/offline-start";
 import { checkAiBudget, DAILY_AI_SOFT_CAP, loadUsage, recordAiUsage } from "@/lib/usage";
@@ -98,8 +98,33 @@ export function MissionPlayer({ missionId }: { missionId: string }) {
   const [atmosphereDataUrl, setAtmosphereDataUrl] = useState<string | null>(
     null,
   );
+  const [beatFlash, setBeatFlash] = useState<string | null>(null);
   const scroller = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  function flashBeats(ids: string[], beats: SceneSession["beats"]) {
+    if (!ids.length) return;
+    const labels = ids
+      .map((id) => beats.find((b) => b.id === id)?.goal ?? id)
+      .slice(0, 2);
+    setBeatFlash(`✓ ${labels.join(" · ")}`);
+    window.setTimeout(() => setBeatFlash(null), 2800);
+  }
+
+  function newlyCompletedBeats(
+    prev: SceneSession | null,
+    next: SceneSession,
+  ): string[] {
+    if (!prev) {
+      return next.beats.filter((b) => b.completed).map((b) => b.id);
+    }
+    return next.beats
+      .filter((b) => {
+        const before = prev.beats.find((x) => x.id === b.id);
+        return b.completed && !before?.completed;
+      })
+      .map((b) => b.id);
+  }
 
   function commitSession(
     next: SceneSession,
@@ -391,7 +416,11 @@ export function MissionPlayer({ missionId }: { missionId: string }) {
       setHintText(null);
       setInput("");
       try {
-        const next = offlineLearnerTurn(session, text);
+        const { session: next, newlyCompleted } = offlineLearnerTurnDetailed(
+          session,
+          text,
+        );
+        flashBeats(newlyCompleted, next.beats);
         commitSession(next, "live");
         setError(null);
       } catch (err) {
@@ -411,7 +440,11 @@ export function MissionPlayer({ missionId }: { missionId: string }) {
       setInput("");
       try {
         const base = { ...session, offline: true as const };
-        const next = offlineLearnerTurn(base, text);
+        const { session: next, newlyCompleted } = offlineLearnerTurnDetailed(
+          base,
+          text,
+        );
+        flashBeats(newlyCompleted, next.beats);
         commitSession(next, "live");
         setError("Went offline mid-scene — switched to scripted cast.");
       } catch (err) {
@@ -449,7 +482,13 @@ export function MissionPlayer({ missionId }: { missionId: string }) {
       const contentType = res.headers.get("content-type") ?? "";
       if (!contentType.includes("ndjson") || !res.body) {
         const data = await res.json();
-        if (data.session) commitSession(data.session, "live");
+        if (data.session) {
+          flashBeats(
+            newlyCompletedBeats(session, data.session),
+            data.session.beats,
+          );
+          commitSession(data.session, "live");
+        }
         return;
       }
 
@@ -518,6 +557,7 @@ export function MissionPlayer({ missionId }: { missionId: string }) {
       }
 
       if (lastSession) {
+        flashBeats(newlyCompletedBeats(session, lastSession), lastSession.beats);
         const after = recordAiUsage(1);
         if (budget.warn || after.count >= DAILY_AI_SOFT_CAP * 0.8) {
           const left = Math.max(0, DAILY_AI_SOFT_CAP - after.count);
@@ -817,6 +857,15 @@ export function MissionPlayer({ missionId }: { missionId: string }) {
       {error ? (
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
           {error}
+        </div>
+      ) : null}
+
+      {beatFlash ? (
+        <div
+          role="status"
+          className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-900 shadow-sm motion-safe:animate-pulse"
+        >
+          {beatFlash}
         </div>
       ) : null}
 
