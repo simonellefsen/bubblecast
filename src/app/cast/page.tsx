@@ -9,6 +9,7 @@ import {
   isMissionUnlocked,
 } from "@/content/harborline/world";
 import type { LearnerProfile } from "@/content/types";
+import { bondLabel, parseMemoryNotes } from "@/lib/cast-memory";
 import { hydrateLearner } from "@/lib/learner-client";
 
 export default function CastPage() {
@@ -41,6 +42,8 @@ export default function CastPage() {
           {harborline.characters.map((c) => {
             const rel = learner?.relationships.find((r) => r.characterId === c.id);
             const score = rel?.score ?? 20;
+            const bond = bondLabel(score);
+            const memories = parseMemoryNotes(rel?.notes ?? "", 3);
             const missions = harborline.missions.filter((m) =>
               m.castIds.includes(c.id),
             );
@@ -56,21 +59,30 @@ export default function CastPage() {
                       <h2 className="font-semibold">{c.name}</h2>
                       <p className="text-sm text-slate-500">{c.role}</p>
                     </div>
-                    <span
-                      className="rounded-full px-2 py-0.5 text-xs font-medium text-white"
-                      style={{ backgroundColor: c.accentColor }}
-                    >
-                      {score}/100
-                    </span>
+                    <div className="text-right">
+                      <span
+                        className="rounded-full px-2 py-0.5 text-xs font-medium text-white"
+                        style={{ backgroundColor: c.accentColor }}
+                      >
+                        {score}/100
+                      </span>
+                      <p className="mt-1 text-[11px] capitalize text-slate-400">
+                        {bond}
+                      </p>
+                    </div>
                   </div>
                   <p className="mt-2 text-sm text-slate-600">{c.bio}</p>
                   <p className="mt-2 text-xs text-slate-500">
                     Hook: {c.teachingHook}
                   </p>
-                  {rel?.notes ? (
-                    <p className="mt-2 line-clamp-2 text-xs italic text-slate-500">
-                      Memory: {rel.notes}
-                    </p>
+                  {memories.length > 0 ? (
+                    <ul className="mt-2 space-y-0.5 text-xs italic text-slate-500">
+                      {memories.map((m) => (
+                        <li key={m} className="line-clamp-1">
+                          · {m}
+                        </li>
+                      ))}
+                    </ul>
                   ) : null}
                   <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100">
                     <div

@@ -1,5 +1,6 @@
 import type { DebriefPacket, LearnerProfile } from "@/content/types";
 import { harborline } from "@/content/harborline/world";
+import { appendRelationshipNote } from "@/lib/cast-memory";
 import { scheduleNextReview } from "@/lib/srs";
 
 export function createDefaultLearner(): LearnerProfile {
@@ -49,7 +50,7 @@ export function applyDebriefToLearner(
     const stamp = `${missionTitle}: ${
       noteSnippet || (delta.delta >= 0 ? "good scene together" : "awkward beat")
     }`;
-    const notes = [stamp, rel.notes].filter(Boolean).join(" · ").slice(0, 280);
+    const notes = appendRelationshipNote(rel.notes, stamp);
     return { ...rel, score, notes };
   });
 

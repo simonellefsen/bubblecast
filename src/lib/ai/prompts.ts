@@ -26,14 +26,33 @@ function formatLearnerContext(ctx?: SceneLearnerContext) {
     relationships: ctx.relationships.map((r) => ({
       characterId: r.characterId,
       score: r.score,
-      warmth:
-        r.score >= 70 ? "warm friend" : r.score >= 40 ? "familiar" : "new acquaintance",
-      // Short running memory from prior debriefs
-      memory: r.notes ? r.notes.slice(0, 160) : undefined,
+      bond:
+        r.bond ??
+        (r.score >= 70
+          ? "close friend"
+          : r.score >= 45
+            ? "familiar"
+            : r.score >= 25
+              ? "acquaintance"
+              : "new acquaintance"),
+      tone:
+        r.tone ??
+        "Match politeness to bond; do not invent detailed backstory.",
+      // Newest memory stamps first (from prior debriefs)
+      memories: r.memories?.length
+        ? r.memories
+        : r.notes
+          ? r.notes
+              .split(/\s*·\s*/)
+              .map((s) => s.trim())
+              .filter(Boolean)
+              .slice(0, 3)
+          : [],
+      scenesTogether: r.scenesTogether ?? 0,
     })),
     focusVocab: ctx.focusVocab,
     instruction:
-      "If relationship score is high, be warmer/more informal. If low, more polite distance. Reference memory notes lightly if present (do not lecture about past scenes). Gently reuse 1 focusVocab item when natural — do not force a vocab quiz.",
+      "Match each NPC's tone to their bond and tone field. Lightly callback 0–1 memory (if any) without lecturing or inventing past events. If scenesTogether is high, act like regulars. Gently reuse 1 focusVocab item when natural — never run a vocab quiz mid-scene.",
   };
 }
 
@@ -116,10 +135,21 @@ export function actorSystemPrompt(session: SceneSession, cast: Character[]) {
   const relLine = ctx?.relationships
     ?.map((r) => {
       const name = cast.find((c) => c.id === r.characterId)?.name ?? r.characterId;
-      const mem = r.notes ? ` mem="${r.notes.slice(0, 80)}"` : "";
-      return `${name}:${r.score}${mem}`;
+      const bond = r.bond ?? `${r.score}/100`;
+      const mems = (r.memories?.length
+        ? r.memories
+        : r.notes
+          ? r.notes.split(/\s*·\s*/).filter(Boolean).slice(0, 2)
+          : []
+      )
+        .map((m) => m.slice(0, 60))
+        .join(" | ");
+      const together =
+        typeof r.scenesTogether === "number" ? ` together=${r.scenesTogether}` : "";
+      const tone = r.tone ? ` tone="${r.tone.slice(0, 80)}"` : "";
+      return `${name}:${bond}${together}${tone}${mems ? ` mem="${mems}"` : ""}`;
     })
-    .join(", ");
+    .join("; ");
   const vocabLine = ctx?.focusVocab
     ?.slice(0, 5)
     .map((v) => v.word)
@@ -132,9 +162,10 @@ Stay in character. 1–3 short NPC turns max per learner message.
 Mark beats completed when the learner roughly achieves them (accept imperfect Spanish).
 If the learner writes English, respond in simple Spanish and gently model the Spanish form; do not shame them.
 Set sceneShouldEnd=true when mission goals are mostly met or turn budget is nearly exhausted and a natural close exists.
+Match NPC warmth/register to bond + tone; callback at most one memory if present (no invented history).
 CEFR: ${session.cefr}. Learner: ${ctx?.displayName ?? "Traveler"}. Mission: ${mission.title}. Goal: ${mission.learnerGoal}.
 Cast: ${cast.map((c) => `${c.name} (${c.id}): ${c.traits.join(", ")}`).join("; ")}.
-Relationships (0-100) + memory snippets: ${relLine || "default"}.
+Relationships + memory: ${relLine || "default"}.
 Focus vocab to reuse gently: ${vocabLine || "none"}.
 Open beats: ${session.beats.map((b) => `${b.id}:${b.goal}${b.completed ? " [done]" : ""}`).join(" | ")}.`;
 }

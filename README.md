@@ -50,6 +50,10 @@ Default pair: **English → Spanish**, CEFR A1–B1.
 - **Location atmosphere cache**: Imagine art is reused per location (session memory) so replays skip the image call; comics use it as panel backdrops  
 - **Debrief postcard**: share or copy a formatted mission summary (Web Share + clipboard)  
 - **Free phrase drill** (Journal + city map): English cue → Spanish MCQ, no AI budget; keeps streak when soft cap is low  
+- **Cast memory depth**: bond tiers + up to 3 debrief memories per character flow into comic/director/actor prompts; Cast page shows stamps  
+- **Daily challenge**: deterministic unlocked mission of the day on the city map  
+- **Local debrief log**: device history always (cloud when available)  
+
 
 
 

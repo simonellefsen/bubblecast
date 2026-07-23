@@ -167,7 +167,19 @@ export interface SceneTurn {
 /** Compact learner snapshot carried with the scene (serverless-safe). */
 export interface SceneLearnerContext {
   displayName: string;
-  relationships: { characterId: CharacterId; score: number; notes: string }[];
+  relationships: {
+    characterId: CharacterId;
+    score: number;
+    notes: string;
+    /** stranger | acquaintance | familiar | close */
+    bond?: string;
+    /** Newest-first memory stamps from prior debriefs */
+    memories?: string[];
+    /** How the NPC should pitch tone for this bond */
+    tone?: string;
+    /** Completed missions shared with this character */
+    scenesTogether?: number;
+  }[];
   /** Words to weave/reuse gently (new + fuzzy first). */
   focusVocab: { word: string; gloss: string; status: VocabEntry["status"] }[];
 }

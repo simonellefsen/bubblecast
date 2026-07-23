@@ -469,6 +469,13 @@ export function MissionPlayer({ missionId }: { missionId: string }) {
         mission.id,
         data.debrief,
       );
+      // Local debrief log (works offline / without Supabase)
+      try {
+        const { appendLocalDebrief } = await import("@/lib/local-debrief-log");
+        appendLocalDebrief(mission.id, data.debrief);
+      } catch {
+        /* ignore */
+      }
       setLearner(updated);
       clearActiveScene(missionId);
       if (syncError) {

@@ -57,7 +57,7 @@ export default function JournalPage() {
           <section className="rounded-2xl border bg-white p-4 shadow-sm">
             <h2 className="font-semibold">Recent debriefs</h2>
             <p className="mt-1 text-xs text-slate-500">
-              From cloud mission runs (newest first)
+              Cloud when available; always saved on this device too
             </p>
             <div className="mt-3">
               <MissionHistory />

@@ -13,13 +13,22 @@ import {
   hasCachedAtmosphere,
   setCachedAtmosphere,
 } from "@/lib/atmosphere-cache";
+import {
+  appendRelationshipNote,
+  bondLabel,
+  bondTier,
+  parseMemoryNotes,
+} from "@/lib/cast-memory";
+import { dayKey, getDailyChallenge, hashDayKey } from "@/lib/daily-challenge";
 import { formatDebriefPostcard } from "@/lib/debrief-postcard";
+import { buildSceneLearnerContext } from "@/lib/learner-context";
 import {
   buildDrillItems,
   buildPhraseBank,
   phraseAnswersMatch,
 } from "@/lib/phrase-bank";
 import { shouldRequestAtmosphere } from "@/lib/prefs";
+import { createDefaultLearner } from "@/lib/session/store";
 import type { DebriefPacket, VocabEntry } from "@/content/types";
 
 function debrief(partial: Partial<DebriefPacket>): DebriefPacket {
@@ -226,5 +235,62 @@ describe("phrase bank drill", () => {
   it("normalizes phrase answers for fuzzy match", () => {
     assert.equal(phraseAnswersMatch("¿Cuánto cuesta?", "cuanto cuesta"), true);
     assert.equal(phraseAnswersMatch("Gracias", "Por favor"), false);
+  });
+});
+
+describe("cast memory", () => {
+  it("maps bond tiers", () => {
+    assert.equal(bondTier(20), "stranger");
+    assert.equal(bondTier(30), "acquaintance");
+    assert.equal(bondTier(50), "familiar");
+    assert.equal(bondTier(80), "close");
+    assert.equal(bondLabel(80), "close friend");
+  });
+
+  it("keeps newest memory stamps", () => {
+    const notes = appendRelationshipNote(
+      "Order breakfast: coffee · Old: earlier",
+      "Polite complaint: fixed cold coffee",
+    );
+    const parsed = parseMemoryNotes(notes);
+    assert.equal(parsed[0], "Polite complaint: fixed cold coffee");
+    assert.ok(parsed.length <= 3);
+  });
+
+  it("enriches scene learner context with bond + memories", () => {
+    const learner = createDefaultLearner();
+    learner.relationships = learner.relationships.map((r) =>
+      r.characterId === "mira"
+        ? {
+            ...r,
+            score: 72,
+            notes: "Order breakfast: got coffee · Prior: smiled",
+          }
+        : r,
+    );
+    learner.completedMissionIds = ["cafe-breakfast"];
+    const ctx = buildSceneLearnerContext(learner, ["mira"]);
+    assert.equal(ctx.relationships.length, 1);
+    assert.equal(ctx.relationships[0]?.bond, "close friend");
+    assert.ok((ctx.relationships[0]?.memories?.length ?? 0) >= 1);
+    assert.equal(ctx.relationships[0]?.scenesTogether, 1);
+    assert.ok(ctx.relationships[0]?.tone);
+  });
+});
+
+describe("daily challenge", () => {
+  it("is deterministic for a day key", () => {
+    const day = "2026-07-23";
+    const a = getDailyChallenge([], new Date(`${day}T12:00:00`));
+    const b = getDailyChallenge([], new Date(`${day}T18:00:00`));
+    assert.equal(a.mission.id, b.mission.id);
+    assert.equal(a.day, dayKey(new Date(`${day}T12:00:00`)));
+    assert.equal(hashDayKey(day), hashDayKey(day));
+  });
+
+  it("prefers incomplete unlocked missions", () => {
+    const c = getDailyChallenge(["cafe-breakfast"], new Date("2026-07-23T12:00:00"));
+    assert.equal(c.kind, "new");
+    assert.notEqual(c.mission.id, "cafe-breakfast");
   });
 });

@@ -9,6 +9,7 @@ import {
 import type { LearnerProfile } from "@/content/types";
 import { loadStreak } from "@/lib/streak";
 import { ActiveMissionBanner } from "./ActiveMissionBanner";
+import { DailyChallengeCard } from "./DailyChallengeCard";
 import { DueVocabBanner } from "./DueVocabBanner";
 import { FreePracticeCard } from "./FreePracticeCard";
 import { OnboardingCard } from "./OnboardingCard";
@@ -49,6 +50,8 @@ export function CityMap({ learner }: { learner: LearnerProfile }) {
       <OnboardingCard show={completed.length === 0} />
 
       <DueVocabBanner learner={learner} />
+
+      <DailyChallengeCard learner={learner} />
 
       <FreePracticeCard />
 
